@@ -43,6 +43,27 @@ button:hover{
  background:#0056b3;
 }
 
+button:disabled{
+ background:#7aa7e0;
+ cursor:not-allowed;
+}
+
+.status-message{
+ min-height:24px;
+ margin:10px auto;
+ width:90%;
+ font-size:14px;
+ font-weight:600;
+}
+
+.status-message.error{
+ color:#b42318;
+}
+
+.status-message.info{
+ color:#175cd3;
+}
+
 /* dashboard */
 
 .dashboard{

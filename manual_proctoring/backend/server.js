@@ -134,7 +134,7 @@ app.get('/api/session', requireAuth, (req, res) => {
   })
 })
 
-app.get('/api/student', requireAuth, (req, res) => {
+app.get('/api/student', (req, res) => {
   return res.json(req.student)
 })
 
