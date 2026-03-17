@@ -54,7 +54,7 @@ export const Sidebar = () => {
         })}
       </div>
 
-      <aside className="glass-surface hidden w-60 shrink-0 rounded-xl px-3 py-4 lg:flex lg:flex-col">
+      <aside className="glass-surface hidden w-60 shrink-0 rounded-xl px-3 py-4 lg:flex lg:h-[calc(100vh-2rem)] lg:flex-col lg:overflow-y-auto">
         <div className="border-b border-slate-800 px-2 pb-4">
           <p className="text-sm font-semibold text-slate-100">ProctorVision</p>
           <p className="mt-1 text-xs text-slate-400">Teacher Console</p>
