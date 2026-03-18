@@ -9,6 +9,14 @@ body{
  height:100vh;
 }
 
+body.exam-page{
+ display:block;
+ height:auto;
+ min-height:100vh;
+ overflow-y:auto;
+ padding:24px 0;
+}
+
 .container{
  background:white;
  padding:40px;
@@ -163,11 +171,14 @@ button:disabled{
 
 .exam-container{
  width:90%;
- height:90vh;
+ min-height:calc(100vh - 48px);
+ height:auto;
  display:flex;
  flex-direction:column;
  align-items:center;
  gap:16px;
+ margin:0 auto;
+ padding-bottom:220px;
 }
 
 .top-bar{

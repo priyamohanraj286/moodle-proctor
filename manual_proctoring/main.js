@@ -5,6 +5,8 @@ const path = require('path')
 
 let mainWindow
 let monitoringInterval = null
+const isDevelopmentMode = !app.isPackaged
+let devBlockedAppMonitoringEnabled = !isDevelopmentMode
 
 const BLOCKED_APPS_CONFIG_PATH = path.join(
   __dirname,
@@ -171,6 +173,10 @@ async function getRunningProcesses () {
 }
 
 async function scanAndBlockNetworkApps () {
+  if (isDevelopmentMode && !devBlockedAppMonitoringEnabled) {
+    return
+  }
+
   const blockedNetworkApps = loadBlockedNetworkApps()
   const runningProcesses = await getRunningProcesses()
 
@@ -256,6 +262,33 @@ ipcMain.on('start-exam-monitoring', () => {
 
 ipcMain.on('stop-exam-monitoring', () => {
   stopExamMonitoring()
+})
+
+ipcMain.handle('get-exam-dev-settings', () => ({
+  isDevelopmentMode,
+  blockedAppMonitoringEnabled: isDevelopmentMode
+    ? devBlockedAppMonitoringEnabled
+    : true
+}))
+
+ipcMain.handle('set-blocked-app-monitoring-enabled', (_, isEnabled) => {
+  if (!isDevelopmentMode) {
+    return {
+      isDevelopmentMode,
+      blockedAppMonitoringEnabled: true
+    }
+  }
+
+  devBlockedAppMonitoringEnabled = Boolean(isEnabled)
+
+  if (devBlockedAppMonitoringEnabled && monitoringInterval) {
+    scanAndBlockNetworkApps()
+  }
+
+  return {
+    isDevelopmentMode,
+    blockedAppMonitoringEnabled: devBlockedAppMonitoringEnabled
+  }
 })
 
 app.on('browser-window-created', (_, window) => {

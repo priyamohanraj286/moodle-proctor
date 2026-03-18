@@ -8,6 +8,7 @@ let visibilityViolationLogged = false
 let blurViolationLogged = false
 let audioContext = null
 let audioUnlocked = false
+let blockedAppMonitoringEnabled = true
 
 const MAX_WARNINGS = 15
 const NETWORK_APP_WARNING_COOLDOWN_MS = 5000
@@ -188,6 +189,61 @@ function showWarningStatus(violation = {}) {
   setExamStatus(`${warningCopy.title}. ${warningCopy.detail}`, 'error')
 }
 
+function renderDevMonitoringState(settings = {}) {
+  const panel = document.getElementById('devMonitoringPanel')
+  const toggle = document.getElementById('devBlockedAppToggle')
+  const message = document.getElementById('devMonitoringMessage')
+
+  if (!panel || !toggle || !message) {
+    return
+  }
+
+  const isDevelopmentMode = Boolean(settings.isDevelopmentMode)
+  blockedAppMonitoringEnabled = Boolean(settings.blockedAppMonitoringEnabled)
+
+  panel.hidden = !isDevelopmentMode
+
+  if (!isDevelopmentMode) {
+    return
+  }
+
+  toggle.checked = blockedAppMonitoringEnabled
+  message.innerText = blockedAppMonitoringEnabled
+    ? 'Blocked app monitoring is enabled for this dev session. Matching apps will be closed.'
+    : 'Blocked app monitoring is disabled in development until you turn it on here.'
+}
+
+async function loadDevMonitoringSettings() {
+  if (!window.electronAPI?.getExamDevSettings) {
+    return
+  }
+
+  try {
+    const settings = await window.electronAPI.getExamDevSettings()
+    renderDevMonitoringState(settings)
+  } catch (error) {
+    console.error('Failed to load dev monitoring settings:', error)
+  }
+}
+
+function registerDevMonitoringControls() {
+  const toggle = document.getElementById('devBlockedAppToggle')
+
+  if (!toggle || !window.electronAPI?.setBlockedAppMonitoringEnabled) {
+    return
+  }
+
+  toggle.addEventListener('change', async () => {
+    try {
+      const settings = await window.electronAPI.setBlockedAppMonitoringEnabled(toggle.checked)
+      renderDevMonitoringState(settings)
+    } catch (error) {
+      toggle.checked = blockedAppMonitoringEnabled
+      console.error('Failed to update blocked app monitoring setting:', error)
+    }
+  })
+}
+
 function renderWarningHistory(violations = []) {
   const historyList = document.getElementById('warningHistoryList')
 
@@ -220,6 +276,56 @@ function renderWarningHistory(violations = []) {
       `
     })
     .join('')
+}
+
+function renderQuestionSummary(questions = []) {
+  const questionList = document.getElementById('questionSummaryList')
+
+  if (!questionList) {
+    return
+  }
+
+  if (!Array.isArray(questions) || questions.length === 0) {
+    questionList.innerHTML = '<li style="color: #475467; font-size: 14px;">No question summary is available.</li>'
+    return
+  }
+
+  questionList.innerHTML = questions
+    .map(question => {
+      const questionText = escapeHtml(question.question || 'Untitled question')
+      const options = Array.isArray(question.options) ? question.options : []
+
+      const optionMarkup = options.length === 0
+        ? '<li style="color: #475467; font-size: 13px;">No options listed.</li>'
+        : options
+            .map(option => `<li style="font-size: 13px; color: #344054;">${escapeHtml(option)}</li>`)
+            .join('')
+
+      return `
+        <li style="padding: 12px; border: 1px solid #eaecf0; border-radius: 10px; background: #f8fafc;">
+          <div style="font-weight: 700; color: #101828; margin-bottom: 8px;">${questionText}</div>
+          <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px;">
+            ${optionMarkup}
+          </ul>
+        </li>
+      `
+    })
+    .join('')
+}
+
+async function loadQuestionSummary() {
+  const response = await fetchWithSession(`${API_BASE_URL}/api/questions`)
+
+  if (!response) {
+    return
+  }
+
+  if (!response.ok) {
+    throw new Error('Question summary request failed')
+  }
+
+  const data = await response.json()
+  renderQuestionSummary(data)
 }
 
 function ensureAudioContext() {
@@ -565,6 +671,7 @@ async function loadExam() {
 
     startTimer(data.timerSeconds)
     await loadQuestionPaper(data.questionPaper)
+    await loadQuestionSummary()
     setExamStatus('Your exam is ready. Stay focused and good luck.', 'info')
   } catch (error) {
     console.error('Error loading exam:', error)
@@ -886,6 +993,8 @@ window.addEventListener('beforeunload', () => {
 })
 
 window.addEventListener('load', async () => {
+  registerDevMonitoringControls()
+  await loadDevMonitoringSettings()
   registerExamGuards()
   registerAudioUnlockHandlers()
   await unlockAlertAudio()
