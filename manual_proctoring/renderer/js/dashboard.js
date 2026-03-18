@@ -39,6 +39,17 @@ function renderAttemptSummary(attempt) {
     : 'Not submitted'
 }
 
+function updateStartButton(attempt) {
+  const startButton = document.querySelector('.start-btn')
+
+  if (!startButton) {
+    return
+  }
+
+  const canResume = Boolean(attempt?.canResume || attempt?.status === 'in_progress')
+  startButton.innerText = canResume ? 'Resume Exam' : 'Start Exam'
+}
+
 async function loadDashboard() {
   setStatus('Loading your exam details...', 'info')
 
@@ -60,6 +71,7 @@ async function loadDashboard() {
     document.getElementById('studentEmail').innerText = data.student.email
     document.getElementById('examName').innerText = data.student.exam
     renderAttemptSummary(data.attempt)
+    updateStartButton(data.attempt)
 
     if (data.attempt?.status === 'submitted') {
       setStatus('This exam attempt has already been submitted.', 'info')

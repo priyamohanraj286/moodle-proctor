@@ -126,6 +126,7 @@ function serializeAttempt(attempt) {
     submittedAt: attempt.submittedAt,
     submissionReason: attempt.submissionReason,
     maxWarnings: MAX_WARNINGS,
+    canResume: attempt.status === 'in_progress',
     violationCount: attempt.violationCount,
     violations: attempt.violations
   }
