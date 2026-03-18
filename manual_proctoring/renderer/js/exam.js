@@ -35,6 +35,69 @@ function updateViolationCount(count) {
   document.getElementById('violationCount').innerText = String(count || 0)
 }
 
+function formatViolationTimestamp(timestamp) {
+  if (!timestamp) {
+    return 'Time unavailable'
+  }
+
+  const date = new Date(timestamp)
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Time unavailable'
+  }
+
+  return date.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderWarningHistory(violations = []) {
+  const historyList = document.getElementById('warningHistoryList')
+
+  if (!historyList) {
+    return
+  }
+
+  const recentViolations = Array.isArray(violations)
+    ? violations.slice(-5).reverse()
+    : []
+
+  if (recentViolations.length === 0) {
+    historyList.innerHTML = '<li style="color: #475467; font-size: 14px;">No warnings recorded yet.</li>'
+    return
+  }
+
+  historyList.innerHTML = recentViolations
+    .map(violation => {
+      const detail = escapeHtml(violation.detail || 'No detail provided.')
+      const type = escapeHtml(violation.type || 'unknown')
+      const timestamp = escapeHtml(formatViolationTimestamp(violation.createdAt))
+
+      return `
+        <li style="padding: 12px; border: 1px solid #eaecf0; border-radius: 10px; background: #f8fafc;">
+          <div style="font-size: 13px; color: #475467; margin-bottom: 6px;">${timestamp}</div>
+          <div style="font-weight: 700; color: #101828; margin-bottom: 4px;">${type}</div>
+          <div style="font-size: 14px; color: #344054; line-height: 1.4;">${detail}</div>
+        </li>
+      `
+    })
+    .join('')
+}
+
 function ensureAudioContext() {
   if (!window.AudioContext && !window.webkitAudioContext) {
     return null
@@ -192,6 +255,7 @@ async function reportViolation(type, detail) {
     if (response.ok && data.attempt) {
       currentAttempt = data.attempt
       updateViolationCount(data.attempt.violationCount)
+      renderWarningHistory(data.attempt.violations)
       playWarningBeep()
 
       if (data.attempt.status === 'submitted') {
@@ -256,6 +320,7 @@ async function startExamAttempt() {
 
   currentAttempt = data.attempt
   updateViolationCount(data.attempt.violationCount)
+  renderWarningHistory(data.attempt.violations)
   examStarted = true
 
   if (window.electronAPI?.startExamMonitoring) {
@@ -287,7 +352,10 @@ async function loadExam() {
       return
     }
 
+    currentAttempt = data.attempt
     renderExamHeader(data.student)
+    updateViolationCount(data.attempt?.violationCount)
+    renderWarningHistory(data.attempt?.violations)
 
     const cameraReady = await startCamera()
 
