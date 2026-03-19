@@ -336,6 +336,7 @@ def _process_frame(frame: np.ndarray, state: SessionState) -> dict:
 
 
     violations = []
+    advisories = []
 
     if face_result.get("face_count", 1) == 0:
         violations.append("No face detected")
@@ -353,21 +354,21 @@ def _process_frame(frame: np.ndarray, state: SessionState) -> dict:
         detail = f"Forbidden object detected: {', '.join(labels)}" if labels else "Forbidden object detected"
         violations.append(detail)
 
-    if blink_result.get("anomaly"):
-        violations.append("Abnormal blink rate detected")
+    if C.ADVISORY_BLINK_ENABLED and blink_result.get("anomaly"):
+        advisories.append("Abnormal blink pattern observed")
 
-    if lip_result.get("talking"):
-        violations.append("Talking detected")
+    if C.ADVISORY_LIP_ENABLED and lip_result.get("talking"):
+        advisories.append("Possible speech activity observed")
 
     if light_result.get("status") == "blocked":
         violations.append("Camera may be blocked")
     if light_result.get("status") == "too_dark":
-        violations.append("Lighting too dark - face not visible")
-    if light_result.get("light_change"):
-        violations.append("Suspicious lighting change detected")
+        advisories.append("Lighting too dark for reliable monitoring")
+    if C.ADVISORY_LIGHTING_ENABLED and light_result.get("light_change"):
+        advisories.append("Lighting changed sharply")
 
-    if motion_result.get("motion_detected"):
-        violations.append("Background movement detected")
+    if C.ADVISORY_MOTION_ENABLED and motion_result.get("motion_detected"):
+        advisories.append("Background movement detected")
 
     if identity_result.get("identity_status") == "mismatch":
         violations.append("Identity could not be verified")
@@ -376,6 +377,7 @@ def _process_frame(frame: np.ndarray, state: SessionState) -> dict:
         "frame":      state.frame_count,
         "fps":        round(state.display_fps, 1),
         "violations": violations,
+        "advisories": advisories,
         "flag":       len(violations) > 0,
         "message":    violations[0] if violations else "OK",
         "details": {
