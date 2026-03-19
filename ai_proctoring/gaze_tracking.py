@@ -35,7 +35,8 @@ MODEL_POINTS_3D = np.array([
 ], dtype=np.float64)
 
 MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
-MODEL_PATH = "face_landmarker.task"
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(MODULE_DIR, "face_landmarker.task")
 
 
 def _ensure_model():

@@ -8,12 +8,14 @@ On first run the weights are auto-downloaded by ultralytics (~6 MB for nano).
 
 import cv2
 import time
+import os
 
 from violation_logger import ViolationLogger, ViolationType
 from utils import capture_screenshot
 
 # ─── Tuning ───────────────────────────────────────────────────────────────────
-YOLO_MODEL_NAME    = "yolov8n.pt"     # Nano = fastest; swap for yolov8s/m for accuracy
+MODULE_DIR         = os.path.dirname(os.path.abspath(__file__))
+YOLO_MODEL_NAME    = os.path.join(MODULE_DIR, "yolov8n.pt")     # Nano = fastest; swap for yolov8s/m for accuracy
 PHONE_CONF_THRESH  = 0.45             # Minimum confidence to flag
 PHONE_CLASS_ID     = 67               # COCO class 67 = "cell phone"
 EVENT_COOLDOWN_SEC = 4.0              # Min seconds between repeated phone events

@@ -12,6 +12,7 @@ Uses COCO class IDs for common objects + phone (already in phone_detection).
 
 import cv2
 import time
+import os
 
 from violation_logger import ViolationLogger, ViolationType
 from utils import capture_screenshot
@@ -29,6 +30,8 @@ FORBIDDEN_OBJECTS = {
 
 EARPHONE_KEYWORDS  = ["earphone", "headphone", "airpod"]   # YOLO custom if available
 EVENT_COOLDOWN_SEC = 5.0
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+YOLO_MODEL_PATH = os.path.join(MODULE_DIR, "yolov8n.pt")
 BBOX_COLORS = {
     "Cell Phone":  (0,   50,  255),
     "Book":        (0,   165, 255),
@@ -110,7 +113,7 @@ class ObjectDetector:
         try:
             from ultralytics import YOLO
             import numpy as np
-            self._model = YOLO("yolov8n.pt")
+            self._model = YOLO(YOLO_MODEL_PATH)
             dummy = np.zeros((320, 320, 3), dtype="uint8")
             self._model.predict(source=dummy, conf=0.5, verbose=False, imgsz=320)
             print("[ObjectDetector] Loaded YOLOv8 for forbidden object detection.")

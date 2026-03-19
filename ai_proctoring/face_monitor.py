@@ -27,7 +27,8 @@ BBOX_COLOR_WARN      = (0, 165, 255)
 BBOX_COLOR_VIOL      = (0, 0, 220)
 
 MODEL_URL  = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
-MODEL_PATH = "blaze_face_short_range.tflite"
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(MODULE_DIR, "blaze_face_short_range.tflite")
 
 
 def _ensure_model():

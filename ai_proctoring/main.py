@@ -2,7 +2,7 @@
 AI Proctoring System v3 — WebSocket Edition
 Replaces cv2.VideoCapture with frames streamed from the browser.
 """
-import asyncio, base64, cv2, numpy as np, time, sys
+import asyncio, base64, cv2, numpy as np, time, sys, signal
 from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,10 +34,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+uvicorn_server = None
+shutdown_in_progress = False
+
+
+def request_shutdown(reason: str = "requested") -> bool:
+    global shutdown_in_progress
+
+    if shutdown_in_progress:
+        return False
+
+    shutdown_in_progress = True
+    print(f"[INFO] Shutdown requested: {reason}")
+
+    if uvicorn_server is not None:
+        uvicorn_server.should_exit = True
+
+    return True
+
+
+@app.get("/")
+async def root():
+    return {
+        "service": "AI Proctoring System v3",
+        "status": "running",
+        "http_endpoints": ["/", "/health", "/proctor"],
+        "websocket_endpoints": ["/proctor", "/proctor/", "/ws/proctor", "/ws/proctor/"],
+        "note": "Use a WebSocket client for /proctor. Visiting it in a browser performs HTTP, not WebSocket."
+    }
+
 
 @app.get("/health")
 async def healthcheck():
     return {"status": "ok"}
+
+
+@app.post("/shutdown")
+async def shutdown_server():
+    accepted = request_shutdown("shutdown endpoint")
+    return {
+        "accepted": accepted,
+        "status": "shutting_down" if accepted else "already_stopping"
+    }
+
+
+@app.get("/proctor")
+@app.get("/proctor/")
+async def proctor_http_info():
+    return {
+        "endpoint": "/proctor",
+        "protocol": "websocket",
+        "status": "ready",
+        "message": "This route expects a WebSocket connection with JSON payloads containing a base64 frame."
+    }
 
 # ── Global state (shared across WebSocket connections) ─────────────────────────
 ensure_directories()
@@ -78,6 +127,9 @@ class SessionState:
 
 # ── WebSocket endpoint ─────────────────────────────────────────────────────────
 @app.websocket("/proctor")
+@app.websocket("/proctor/")
+@app.websocket("/ws/proctor")
+@app.websocket("/ws/proctor/")
 async def proctor_ws(websocket: WebSocket):
     await websocket.accept()
     state = SessionState()
@@ -315,4 +367,21 @@ async def on_shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000)
+    uvicorn_server = uvicorn.Server(config)
+
+    def _handle_signal(signum, _frame):
+        signal_name = signal.Signals(signum).name
+        accepted = request_shutdown(f"signal {signal_name}")
+
+        if not accepted and uvicorn_server is not None:
+            uvicorn_server.force_exit = True
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _handle_signal)
+
+    try:
+        uvicorn_server.run()
+    except KeyboardInterrupt:
+        request_shutdown("keyboard interrupt")
