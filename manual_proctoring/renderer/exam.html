@@ -84,10 +84,7 @@
       <div id="proctorDockHandle" class="proctor-panel-header proctor-panel-handle">
         <div>
           <div class="proctor-panel-kicker">Live Monitoring</div>
-          <h2 class="proctor-panel-title">Floating Proctor Panel</h2>
-          <p class="proctor-panel-copy">
-            Drag this panel anywhere. Keep it visible while reading the paper.
-          </p>
+          <h2 class="proctor-panel-title">Proctor View</h2>
         </div>
         <div class="proctor-panel-actions">
           <span id="videoAiStatusBadge" class="video-status-badge video-status-badge-idle">Idle</span>
@@ -104,19 +101,10 @@
           </div>
         </div>
 
-        <div class="proctor-status-grid">
-          <div class="proctor-stat-card">
-            <span class="proctor-stat-label">AI Status</span>
-            <span id="videoAiStatusHeadline" class="proctor-stat-value">Waiting</span>
-          </div>
-          <div class="proctor-stat-card">
-            <span class="proctor-stat-label">Live Feed</span>
-            <span id="videoWarningCount" class="proctor-stat-value">Waiting</span>
-          </div>
-          <div class="proctor-stat-card">
-            <span class="proctor-stat-label">Updated</span>
-            <span id="liveWarningBannerUpdated" class="proctor-stat-value">Waiting</span>
-          </div>
+        <div class="proctor-status-strip">
+          <span id="videoAiStatusHeadline" class="proctor-status-chip">Waiting</span>
+          <span id="videoWarningCount" class="proctor-status-chip">Waiting</span>
+          <span id="liveWarningBannerUpdated" class="proctor-status-chip">Waiting</span>
         </div>
 
         <p id="videoAiStatusText" class="proctor-status-copy">Waiting for camera...</p>

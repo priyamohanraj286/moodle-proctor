@@ -33,6 +33,15 @@ const MAX_WARNINGS = EXAM_CONFIG.maxWarnings
 const recentBlockedAppWarnings = new Map()
 const PROCTOR_DOCK_POSITION_KEY = 'manual_proctoring.proctorDock.position'
 const PROCTOR_DOCK_COLLAPSED_KEY = 'manual_proctoring.proctorDock.collapsed'
+const AI_WARNING_DWELL_MS = {
+  'No face detected': 5000,
+  'Multiple faces detected': 2500,
+  'Looking away from screen': 2500,
+  'Phone detected': 2000,
+  'Forbidden object detected': 2000,
+  'Identity could not be verified': 5000,
+  'Camera may be blocked': 3000
+}
 const USER_FACING_WARNING_COPY = {
   face_absent: {
     title: 'Face not visible',
@@ -217,6 +226,7 @@ function formatLiveUpdateLabel() {
 function resetLiveMonitoringState() {
   lastProctorPayloadAt = 0
   activeViolations.clear()
+  pendingAiViolations.clear()
   setLiveAIWarnings([], [])
 }
 
@@ -439,26 +449,26 @@ function renderVideoFeedState() {
   const modeToHeadline = {
     idle: 'Waiting',
     starting: 'Connecting',
-    running: 'Monitoring Live',
-    warning: 'Attention Needed',
-    stopped: 'Session Stopped',
-    error: 'Action Required'
+    running: 'Live',
+    warning: 'Warning',
+    stopped: 'Stopped',
+    error: 'Error'
   }
 
   videoBox.classList.add(modeToBoxClass[normalizedState] || 'video-box-idle')
   statusBadge.classList.add(modeToBadgeClass[normalizedState] || 'video-status-badge-idle')
   statusBadge.innerText = modeToBadgeLabel[normalizedState] || 'Idle'
   statusHeadline.innerText = modeToHeadline[normalizedState] || 'Waiting'
-  updated.innerText = formatLiveUpdateLabel()
+  updated.innerText = `Updated ${formatLiveUpdateLabel()}`
   warningCount.innerText = hasWarnings || hasAdvisories
-    ? `${warningCountValue + advisoryCountValue} live`
+    ? `${warningCountValue + advisoryCountValue} item${warningCountValue + advisoryCountValue > 1 ? 's' : ''}`
     : lastProctorPayloadAt
-      ? 'Live now'
+      ? 'Feed clear'
       : 'Waiting'
 
   if (hasWarnings) {
     const primaryWarning = liveAiWarnings[0]
-    statusText.innerText = `${warningCountValue} live warning${warningCountValue > 1 ? 's are' : ' is'} currently visible on the camera feed.`
+    statusText.innerText = primaryWarning
     warningOverlay.hidden = false
     warningText.innerText = primaryWarning
     warningStack.innerHTML = liveAiWarnings
@@ -471,7 +481,7 @@ function renderVideoFeedState() {
   warningOverlay.hidden = true
 
   if (hasAdvisories) {
-    statusText.innerText = `${advisoryCountValue} advisory signal${advisoryCountValue > 1 ? 's are' : ' is'} being watched. Keep the candidate centered and visible.`
+    statusText.innerText = 'Monitoring is active. Keep the user visible and centered.'
     warningStack.innerHTML = liveAiAdvisories
       .slice(0, 2)
       .map(advisory => `<div class="video-warning-pill video-warning-pill-info">${escapeHtml(advisory)}</div>`)
@@ -480,8 +490,8 @@ function renderVideoFeedState() {
   }
 
   statusText.innerText = lastProctorPayloadAt
-    ? `Live feed is updating in real time. Last update: ${formatLiveUpdateLabel()}.`
-    : (aiProctoringStatus.detail || 'AI monitoring is standing by.')
+    ? 'Monitoring is active and the feed is clear.'
+    : 'Waiting for live feed...'
   warningStack.innerHTML = '<div class="video-warning-pill video-warning-pill-neutral">Live feed is clear</div>'
 }
 
@@ -1387,6 +1397,64 @@ PROCTORING_VIOLATION_MAP['Lighting too dark - face not visible'] = {
 // or re-appears after clearing.
 // Track active detector messages so they are only logged when first seen.
 const activeViolations = new Set()
+const pendingAiViolations = new Map()
+
+function getAiWarningDwellMs(message) {
+  for (const [pattern, dwellMs] of Object.entries(AI_WARNING_DWELL_MS)) {
+    if (message === pattern || message.startsWith(`${pattern}:`)) {
+      return dwellMs
+    }
+  }
+
+  return 2500
+}
+
+function processIncomingAiViolations(incomingViolations) {
+  const now = Date.now()
+
+  for (const message of incomingViolations) {
+    if (!pendingAiViolations.has(message)) {
+      pendingAiViolations.set(message, now)
+    }
+
+    if (activeViolations.has(message)) {
+      continue
+    }
+
+    const firstSeenAt = pendingAiViolations.get(message) || now
+    const dwellMs = getAiWarningDwellMs(message)
+
+    if (now - firstSeenAt < dwellMs) {
+      continue
+    }
+
+    const mapped = PROCTORING_VIOLATION_MAP[message]
+    if (mapped) {
+      showViolationStatus({
+        type: mapped.type,
+        detail: mapped.detail,
+        severity: 'warning'
+      })
+      reportViolation(mapped.type, mapped.detail, 'warning')
+    } else {
+      showViolationStatus({
+        type: 'proctoring_alert',
+        detail: message,
+        severity: 'warning'
+      })
+      reportViolation('proctoring_alert', message, 'warning')
+    }
+
+    activeViolations.add(message)
+  }
+
+  for (const message of Array.from(pendingAiViolations.keys())) {
+    if (!incomingViolations.has(message)) {
+      pendingAiViolations.delete(message)
+      activeViolations.delete(message)
+    }
+  }
+}
 
 function startFrameCapture(video) {
   const canvas = document.createElement('canvas')
@@ -1568,34 +1636,7 @@ function startFrameCaptureWithOverlay(video) {
       const incomingAdvisories = new Set(result.advisories || [])
       setLiveAIWarnings(Array.from(incomingViolations), Array.from(incomingAdvisories))
 
-      for (const message of incomingViolations) {
-        if (!activeViolations.has(message)) {
-          const mapped = PROCTORING_VIOLATION_MAP[message]
-          if (mapped) {
-            showViolationStatus({
-              type: mapped.type,
-              detail: mapped.detail,
-              severity: 'warning'
-            })
-            reportViolation(mapped.type, mapped.detail, 'warning')
-          } else {
-            showViolationStatus({
-              type: 'proctoring_alert',
-              detail: message,
-              severity: 'warning'
-            })
-            reportViolation('proctoring_alert', message, 'warning')
-          }
-
-          activeViolations.add(message)
-        }
-      }
-
-      for (const message of Array.from(activeViolations)) {
-        if (!incomingViolations.has(message)) {
-          activeViolations.delete(message)
-        }
-      }
+      processIncomingAiViolations(incomingViolations)
 
       if (incomingViolations.size === 0 && incomingAdvisories.size > 0) {
         setAIProctoringStatus({
