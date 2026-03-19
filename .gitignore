@@ -30,3 +30,4 @@ manual_proctoring/backend/logs/
 
 ai_proctoring/venv
 ai_proctoring/screenshots/
+ai_proctoring/violations.jsonl
