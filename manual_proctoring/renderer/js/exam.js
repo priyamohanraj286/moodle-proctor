@@ -28,15 +28,15 @@ const EXAM_CONFIG = {
   networkAppWarningCooldownMs: 5000,
   reconnectCheckIntervalMs: 5000,
   proctorFrameIntervalMs: 125,
-  aiWarningDefaultDwellMs: 2500,
+  aiWarningDefaultDwellMs: 0,
   aiWarningDwellMs: {
-    'No face detected': 5000,
-    'Multiple faces detected': 2500,
-    'Looking away from screen': 2500,
-    'Phone detected': 1000,
-    'Forbidden object detected': 2000,
-    'Identity could not be verified': 5000,
-    'Camera may be blocked': 3000
+    'No face detected': 500,
+    'Multiple faces detected': 0,
+    'Looking away from screen': 0,
+    'Phone detected': 0,
+    'Forbidden object detected': 0,
+    'Identity could not be verified': 1000,
+    'Camera may be blocked': 500
   }
 }
 const MAX_WARNINGS = EXAM_CONFIG.maxWarnings
@@ -409,8 +409,6 @@ function renderVideoFeedState () {
   const statusHeadline = document.getElementById('videoAiStatusHeadline')
   const warningCount = document.getElementById('videoWarningCount')
   const updated = document.getElementById('liveWarningBannerUpdated')
-  const warningOverlay = document.getElementById('videoWarningOverlay')
-  const warningText = document.getElementById('videoWarningText')
   const warningStack = document.getElementById('videoWarningStack')
 
   if (
@@ -420,8 +418,6 @@ function renderVideoFeedState () {
     !statusHeadline ||
     !warningCount ||
     !updated ||
-    !warningOverlay ||
-    !warningText ||
     !warningStack
   ) {
     return
@@ -502,8 +498,6 @@ function renderVideoFeedState () {
   if (hasWarnings) {
     const primaryWarning = liveAiWarnings[0]
     statusText.innerText = primaryWarning
-    warningOverlay.hidden = false
-    warningText.innerText = primaryWarning
     warningStack.innerHTML = liveAiWarnings
       .slice(0, 3)
       .map(
@@ -515,8 +509,6 @@ function renderVideoFeedState () {
       .join('')
     return
   }
-
-  warningOverlay.hidden = true
 
   if (hasAdvisories) {
     statusText.innerText =

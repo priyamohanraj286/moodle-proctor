@@ -605,14 +605,14 @@ button:disabled{
 }
 
 .video-box-warning{
- border-color:#f59e0b;
- box-shadow:0 10px 28px rgba(245, 158, 11, 0.16);
+ border-color:#98a2b3;
+ box-shadow:0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .video-box-error{
- border-color:#fda29b;
- background:#fff7f7;
- box-shadow:0 10px 24px rgba(180, 35, 24, 0.08);
+ border-color:#98a2b3;
+ background:rgba(255, 255, 255, 0.96);
+ box-shadow:0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .proctor-panel{
@@ -754,40 +754,6 @@ video{
  display:block;
 }
 
-.video-warning-overlay{
- position:absolute;
- inset:0;
- display:flex;
- flex-direction:column;
- justify-content:flex-end;
- padding:14px;
- background:linear-gradient(180deg, rgba(16, 24, 40, 0.04) 12%, rgba(180, 35, 24, 0.72) 100%);
-}
-
-.video-warning-label{
- display:inline-flex;
- width:max-content;
- max-width:100%;
- margin-bottom:8px;
- padding:5px 9px;
- border-radius:999px;
- background:rgba(255, 255, 255, 0.22);
- border:1px solid rgba(255, 255, 255, 0.28);
- font-size:10px;
- font-weight:800;
- letter-spacing:0.05em;
- text-transform:uppercase;
- color:#fff;
-}
-
-.video-warning-text{
- font-size:15px;
- font-weight:700;
- line-height:1.35;
- color:#fff;
- text-shadow:0 1px 2px rgba(2, 6, 23, 0.4);
-}
-
 .proctor-status-strip{
  display:flex;
  flex-wrap:wrap;
@@ -836,13 +802,13 @@ video{
 }
 
 .video-warning-pill-warning{
- background:#fffaeb;
- color:#b54708;
+ background:#f2f4f7;
+ color:#344054;
 }
 
 .video-warning-pill-info{
- background:#eff8ff;
- color:#175cd3;
+ background:#f2f4f7;
+ color:#344054;
 }
 
 .secondary-btn{

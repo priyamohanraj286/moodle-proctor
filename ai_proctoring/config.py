@@ -25,7 +25,7 @@ SHOW_DEBUG_INFO = True
 # "strict"   → flag immediately, low thresholds
 # "moderate" → allow minor violations, flag repeated/sustained ones  ← DEFAULT
 # "lenient"  → high thresholds, only obvious cheating
-STRICTNESS = "lenient"
+STRICTNESS = "strict"
 
 _PRESETS = {
     "strict": dict(
@@ -94,7 +94,7 @@ LOG_FILE               = os.path.join(MODULE_DIR, "violations.jsonl")
 YOLO_MODEL             = os.path.join(MODULE_DIR, "yolov8n.pt")     # swap yolov8s.pt for more accuracy
 
 # ── Head pose thresholds ───────────────────────────────────────────────────────
-YAW_THRESHOLD_DEG        = 25.0
+YAW_THRESHOLD_DEG        = 15.0
 PITCH_UP_THRESHOLD_DEG   = 20.0
 PITCH_DOWN_THRESHOLD_DEG = 40.0   # Down is allowed (writing)
 
@@ -105,8 +105,8 @@ HIGH_BLINK_THRESHOLD = 40   # blinks/min
 # Shared detector tuning
 FACE_MIN_DETECTION_CONF    = 0.6
 FACE_MULTI_FACE_COOLDOWN   = 3.0
-GAZE_EVENT_COOLDOWN_SEC    = 8.0
-GAZE_AWAY_FRAME_STREAK     = 6
+GAZE_EVENT_COOLDOWN_SEC    = 4.0
+GAZE_AWAY_FRAME_STREAK     = 3
 PHONE_CONF_THRESH          = 0.55
 PHONE_STREAK_FRAMES        = 4
 PHONE_EVENT_COOLDOWN_SEC   = 6.0
@@ -152,11 +152,11 @@ ADVISORY_BLINK_ENABLED          = False
 ADVISORY_LIP_ENABLED            = False
 ADVISORY_LIGHTING_ENABLED       = False
 ADVISORY_MOTION_ENABLED         = False
-LIVE_NO_FACE_EXPOSURE_SEC       = 3.0
-LIVE_MULTI_FACE_EXPOSURE_SEC    = 2.5
-LIVE_LOOK_AWAY_EXPOSURE_SEC     = 2.5
-LIVE_PHONE_EXPOSURE_SEC         = 2.0
-LIVE_OBJECT_EXPOSURE_SEC        = 2.0
-LIVE_CAMERA_BLOCKED_EXPOSURE_SEC= 3.0
-LIVE_IDENTITY_EXPOSURE_SEC      = 5.0
-LIVE_ADVISORY_EXPOSURE_SEC      = 3.0
+LIVE_NO_FACE_EXPOSURE_SEC       = 1.5
+LIVE_MULTI_FACE_EXPOSURE_SEC    = 1.0
+LIVE_LOOK_AWAY_EXPOSURE_SEC     = 1.5
+LIVE_PHONE_EXPOSURE_SEC         = 0.5
+LIVE_OBJECT_EXPOSURE_SEC        = 0.75
+LIVE_CAMERA_BLOCKED_EXPOSURE_SEC= 1.5
+LIVE_IDENTITY_EXPOSURE_SEC      = 2.5
+LIVE_ADVISORY_EXPOSURE_SEC      = 1.5
