@@ -40,6 +40,40 @@ const EXAM_CONFIG = {
     'Camera may be blocked': 500
   }
 }
+const PROCTOR_FEED_UI = {
+  boxClassByState: {
+    idle: 'video-box-idle',
+    starting: 'video-box-monitoring',
+    running: 'video-box-monitoring',
+    warning: 'video-box-warning',
+    stopped: 'video-box-idle',
+    error: 'video-box-error'
+  },
+  badgeClassByState: {
+    idle: 'video-status-badge-idle',
+    starting: 'video-status-badge-monitoring',
+    running: 'video-status-badge-monitoring',
+    warning: 'video-status-badge-warning',
+    stopped: 'video-status-badge-idle',
+    error: 'video-status-badge-error'
+  },
+  badgeLabelByState: {
+    idle: 'Standby',
+    starting: 'Starting',
+    running: 'Active',
+    warning: 'Warning',
+    stopped: 'Stopped',
+    error: 'Error'
+  },
+  headlineByState: {
+    idle: 'Waiting',
+    starting: 'Connecting',
+    running: 'Live',
+    warning: 'Warning',
+    stopped: 'Stopped',
+    error: 'Error'
+  }
+}
 const MAX_WARNINGS = EXAM_CONFIG.maxWarnings
 const recentBlockedAppWarnings = new Map()
 const PROCTOR_DOCK_POSITION_KEY = 'manual_proctoring.proctorDock.position'
@@ -433,6 +467,23 @@ function getUserFacingWarningCopy (violation = {}) {
   }
 }
 
+function getNormalizedProctorFeedState () {
+  const hasWarnings = liveAiWarnings.length > 0
+  const hasAdvisories = liveAiAdvisories.length > 0
+
+  return {
+    warningCount: liveAiWarnings.length,
+    advisoryCount: liveAiAdvisories.length,
+    hasWarnings,
+    hasAdvisories,
+    normalizedState: hasWarnings
+      ? 'warning'
+      : hasAdvisories
+      ? 'running'
+      : aiProctoringStatus.state || 'idle'
+  }
+}
+
 function renderVideoFeedState () {
   const videoBox = document.getElementById('proctorVideoBox')
   const statusText = document.getElementById('videoAiStatusText')
@@ -454,15 +505,13 @@ function renderVideoFeedState () {
     return
   }
 
-  const warningCountValue = liveAiWarnings.length
-  const advisoryCountValue = liveAiAdvisories.length
-  const hasWarnings = warningCountValue > 0
-  const hasAdvisories = advisoryCountValue > 0
-  const normalizedState = hasWarnings
-    ? 'warning'
-    : hasAdvisories
-    ? 'running'
-    : aiProctoringStatus.state || 'idle'
+  const {
+    warningCount: warningCountValue,
+    advisoryCount: advisoryCountValue,
+    hasWarnings,
+    hasAdvisories,
+    normalizedState
+  } = getNormalizedProctorFeedState()
 
   videoBox.classList.remove(
     'video-box-idle',
@@ -477,45 +526,17 @@ function renderVideoFeedState () {
     'video-status-badge-error'
   )
 
-  const modeToBoxClass = {
-    idle: 'video-box-idle',
-    starting: 'video-box-monitoring',
-    running: 'video-box-monitoring',
-    warning: 'video-box-warning',
-    stopped: 'video-box-idle',
-    error: 'video-box-error'
-  }
-  const modeToBadgeClass = {
-    idle: 'video-status-badge-idle',
-    starting: 'video-status-badge-monitoring',
-    running: 'video-status-badge-monitoring',
-    warning: 'video-status-badge-warning',
-    stopped: 'video-status-badge-idle',
-    error: 'video-status-badge-error'
-  }
-  const modeToBadgeLabel = {
-    idle: 'Standby',
-    starting: 'Starting',
-    running: 'Active',
-    warning: 'Warning',
-    stopped: 'Stopped',
-    error: 'Error'
-  }
-  const modeToHeadline = {
-    idle: 'Waiting',
-    starting: 'Connecting',
-    running: 'Live',
-    warning: 'Warning',
-    stopped: 'Stopped',
-    error: 'Error'
-  }
-
-  videoBox.classList.add(modeToBoxClass[normalizedState] || 'video-box-idle')
-  statusBadge.classList.add(
-    modeToBadgeClass[normalizedState] || 'video-status-badge-idle'
+  videoBox.classList.add(
+    PROCTOR_FEED_UI.boxClassByState[normalizedState] || 'video-box-idle'
   )
-  statusBadge.innerText = modeToBadgeLabel[normalizedState] || 'Idle'
-  statusHeadline.innerText = modeToHeadline[normalizedState] || 'Waiting'
+  statusBadge.classList.add(
+    PROCTOR_FEED_UI.badgeClassByState[normalizedState] ||
+      'video-status-badge-idle'
+  )
+  statusBadge.innerText =
+    PROCTOR_FEED_UI.badgeLabelByState[normalizedState] || 'Idle'
+  statusHeadline.innerText =
+    PROCTOR_FEED_UI.headlineByState[normalizedState] || 'Waiting'
   updated.innerText = `Updated ${formatLiveUpdateLabel()}`
   warningCount.innerText =
     hasWarnings || hasAdvisories

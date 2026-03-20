@@ -19,6 +19,11 @@ const AI_PROCTORING_PORT = 8000
 const AI_PROCTORING_HOST = '127.0.0.1'
 const AI_PROCTORING_DIR = path.join(__dirname, '..', 'ai_proctoring')
 const AI_PROCTORING_ENTRYPOINT = 'main.py'
+const RENDERER_CHANNELS = {
+  aiProctoringStatus: 'ai-proctoring-status',
+  networkAppBlocked: 'network-app-blocked',
+  fullscreenExited: 'fullscreen-exited'
+}
 
 const BLOCKED_APPS_CONFIG_PATH = path.join(
   __dirname,
@@ -117,9 +122,15 @@ function runProcessCommand (file, args = []) {
 function setAiProctoringStatus (state, detail) {
   aiProctoringStatus = { state, detail }
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('ai-proctoring-status', aiProctoringStatus)
+  sendToRenderer(RENDERER_CHANNELS.aiProctoringStatus, aiProctoringStatus)
+}
+
+function sendToRenderer (channel, payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
   }
+
+  mainWindow.webContents.send(channel, payload)
 }
 
 function isAiProctoringPortOpen () {
@@ -340,8 +351,8 @@ async function scanAndBlockNetworkApps () {
     await runProcessCommand('taskkill', ['/PID', processId, '/F'])
   }
 
-  if (detectedApps.size > 0 && mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('network-app-blocked', Array.from(detectedApps))
+  if (detectedApps.size > 0) {
+    sendToRenderer(RENDERER_CHANNELS.networkAppBlocked, Array.from(detectedApps))
   }
 }
 
@@ -458,7 +469,7 @@ ipcMain.handle('set-blocked-app-monitoring-enabled', (_, isEnabled) => {
 
 app.on('browser-window-created', (_, window) => {
   window.on('leave-full-screen', () => {
-    window.webContents.send('fullscreen-exited')
+    sendToRenderer(RENDERER_CHANNELS.fullscreenExited)
   })
 })
 
