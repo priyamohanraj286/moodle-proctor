@@ -45,44 +45,54 @@ const PROCTOR_DOCK_POSITION_KEY = 'manual_proctoring.proctorDock.position'
 const PROCTOR_DOCK_COLLAPSED_KEY = 'manual_proctoring.proctorDock.collapsed'
 const USER_FACING_WARNING_COPY = {
   face_absent: {
-    title: 'Face not visible',
-    detail: 'Your face was not clearly visible in the camera.'
+    title: 'Warning Issued: Face Not Visible',
+    detail:
+      'Your face was not clearly visible in the camera. Return fully into frame immediately.'
   },
   multiple_faces: {
-    title: 'Multiple faces detected',
-    detail: 'More than one face was visible in the camera.'
+    title: 'Warning Issued: Multiple Faces Detected',
+    detail:
+      'More than one face was visible in the camera. Only the candidate must remain in view.'
   },
   phone_detected: {
-    title: 'Phone detected',
-    detail: 'A phone was detected in your camera view.'
+    title: 'Warning Issued: Phone Detected',
+    detail:
+      'A phone was detected in your camera view. Remove it from the exam area immediately.'
   },
   gaze_away: {
-    title: 'Looking away',
-    detail: 'You looked away from the screen.'
+    title: 'Warning Issued: Looking Away',
+    detail:
+      'You looked away from the screen for too long. Face the exam screen and remain focused.'
   },
   lip_movement: {
-    title: 'Talking detected',
-    detail: 'Talking or repeated lip movement was detected.'
+    title: 'Warning Issued: Talking Detected',
+    detail:
+      'Talking or repeated lip movement was detected. Stop speaking and continue silently.'
   },
   camera_blocked: {
-    title: 'Camera may be blocked',
-    detail: 'Your camera view may be blocked or unclear.'
+    title: 'Warning Issued: Camera View Blocked',
+    detail:
+      'Your camera view may be blocked or unclear. Clear the camera immediately.'
   },
   blink_anomaly: {
-    title: 'Unusual blink pattern',
-    detail: 'An unusual blink pattern was detected.'
+    title: 'Warning Issued: Unusual Blink Pattern',
+    detail:
+      'An unusual blink pattern was detected. Stay focused and keep your face clearly visible.'
   },
   lighting_dark: {
-    title: 'Lighting too dark',
-    detail: 'The room is too dark to clearly verify your face.'
+    title: 'Warning Issued: Lighting Too Dark',
+    detail:
+      'The room is too dark to clearly verify your face. Improve lighting immediately.'
   },
   background_motion: {
-    title: 'Background movement',
-    detail: 'Unexpected movement was detected in the background.'
+    title: 'Warning Issued: Background Movement',
+    detail:
+      'Unexpected movement was detected in the background. Keep the exam area clear.'
   },
   identity_mismatch: {
-    title: 'Identity could not be verified',
-    detail: 'Your face could not be matched clearly for verification.'
+    title: 'Warning Issued: Identity Not Verified',
+    detail:
+      'Your face could not be matched clearly for verification. Stay centered and visible.'
   },
   left_exam_view: {
     title: 'You left the exam view',
@@ -646,7 +656,8 @@ function setAIProctoringStatus (status = {}) {
 function showViolationStatus (violation = {}) {
   const warningCopy = getUserFacingWarningCopy(violation)
   const severity = violation.severity === 'info' ? 'info' : 'error'
-  setExamStatus(`${warningCopy.title}. ${warningCopy.detail}`, severity)
+  const prefix = severity === 'error' ? 'Exam warning recorded. ' : ''
+  setExamStatus(`${prefix}${warningCopy.title}. ${warningCopy.detail}`, severity)
 }
 
 function renderDevMonitoringState (settings = {}) {
