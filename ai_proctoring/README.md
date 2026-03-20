@@ -1,4 +1,4 @@
-# AI Exam Proctoring System v3 — Complete Edition
+# AI Exam Proctoring System v3 - Complete Edition
 
 Real-time AI-powered exam proctoring with **11 detection modules**.
 
@@ -82,6 +82,6 @@ Press **`q`** to quit. A **PDF report** is auto-generated on exit.
 
 ## Output
 
-- `violations.jsonl` — structured JSON event log
-- `screenshots/` — PNG snapshots of each violation
-- `report_CANDIDATE_TIMESTAMP.pdf` — auto-generated on session end
+- `violations.jsonl` - structured JSON event log
+- `screenshots/` - PNG snapshots of each violation
+- `reports/` - auto-generated PDF reports saved on session end

@@ -10,8 +10,10 @@ SCREENSHOTS_DIR = C.SCREENSHOTS_DIR
 
 def ensure_directories():
     os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+    os.makedirs(C.REPORTS_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(C.LOG_FILE) or ".", exist_ok=True)
     print(f"[Utils] Screenshot directory: '{SCREENSHOTS_DIR}'")
+    print(f"[Utils] Reports directory: '{C.REPORTS_DIR}'")
 
 def capture_screenshot(frame, frame_index: int, tag: str = "") -> str:
     ensure_directories()

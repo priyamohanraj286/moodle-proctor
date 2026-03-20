@@ -90,6 +90,7 @@ ENABLE_IDENTITY_VERIFY = True
 
 # ── Output ─────────────────────────────────────────────────────────────────────
 SCREENSHOTS_DIR        = os.path.join(MODULE_DIR, "screenshots")
+REPORTS_DIR            = os.path.join(MODULE_DIR, "reports")
 LOG_FILE               = os.path.join(MODULE_DIR, "violations.jsonl")
 YOLO_MODEL             = os.path.join(MODULE_DIR, "yolov8n.pt")     # swap yolov8s.pt for more accuracy
 

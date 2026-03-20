@@ -2,7 +2,7 @@
 AI Proctoring System v3 — WebSocket Edition
 Replaces cv2.VideoCapture with frames streamed from the browser.
 """
-import asyncio, base64, cv2, numpy as np, time, sys, signal, traceback
+import asyncio, base64, cv2, numpy as np, time, sys, signal, traceback, os
 from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -453,7 +453,10 @@ async def on_shutdown():
         from report_generator import generate_report
         report_path = generate_report(
             log_path      = C.LOG_FILE,
-            output_path   = f"report_{C.CANDIDATE_ID}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+            output_path   = os.path.join(
+                C.REPORTS_DIR,
+                f"report_{C.CANDIDATE_ID}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+            ),
             session_start = session_start,
             candidate_id  = C.CANDIDATE_ID,
             exam_name     = C.EXAM_NAME,
