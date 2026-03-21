@@ -8,6 +8,7 @@ import logger from '../../config/logger';
 import moodleService from './moodle.service';
 import jwtService from './jwt.service';
 import type { User, JwtPayload } from '../../types';
+import { UserRole } from '../../types';
 import { UnauthorizedError, BadRequestError, MoodleError } from '../../utils/errors';
 
 // ============================================================================
@@ -61,7 +62,7 @@ class AuthService {
         email: siteInfo.email,
         firstName: siteInfo.firstname,
         lastName: siteInfo.lastname,
-        role: role as 'student' | 'teacher',
+        role: role === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT,
         profileImageUrl: siteInfo.userpictureurl,
       });
 
@@ -125,7 +126,7 @@ class AuthService {
       const oldPayload = jwtService.validateToken(token);
 
       // Decrypt Moodle token
-      const moodleToken = jwtService.decryptMoodleToken(oldPayload.moodleToken);
+      const moodleToken = jwtService.decryptMoodleToken(oldPayload.moodleToken || '');
 
       // Validate Moodle token is still valid
       await moodleService.validateToken(moodleToken);

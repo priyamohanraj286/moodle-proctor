@@ -64,10 +64,27 @@ Before setting up the project, ensure you have the following tools installed on 
   npm --version
   ```
 
-- **Python 3.10+** - Required for AI proctoring service
+
+- **Python 3.11+** - Required for AI proctoring service
   ```bash
   # Check version
   python --version
+  ```
+
+
+- **uv** - Fast Python package installer for AI proctoring service
+  ```bash
+  # Install uv (Linux/macOS)
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+  # Install uv (Windows)
+  powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+  # Or install via pip
+  pip install uv
+
+  # Check installation
+  uv --version
   ```
 
 - **Docker Engine** - Required for running PostgreSQL, MariaDB, Moodle, and containerized services
@@ -148,11 +165,11 @@ cd backend && npm install && cd ..
 # Frontend dependencies
 cd frontend && npm install && cd ..
 
-# AI Proctoring dependencies (requires Python virtual environment)
+
+# AI Proctoring dependencies (using uv for fast package management)
 cd ai_proctoring
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
+
 cd ..
 
 # Mobile client dependencies
@@ -291,10 +308,8 @@ Demo credentials:
 
 ```bash
 cd ai_proctoring
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
+uv sync
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The FastAPI service starts on `http://localhost:8000`.
@@ -303,6 +318,7 @@ Notes:
 
 - this service expects frame data over WebSocket rather than reading directly from `cv2.VideoCapture`
 - most behavior is configured centrally in `ai_proctoring/config.py`
+- dependencies are managed via `uv` and defined in `pyproject.toml`
 - models such as `yolov8n.pt`, `blaze_face_short_range.tflite`, and `face_landmarker.task` are already included in the folder
 - report generation runs on shutdown
 

@@ -31,6 +31,7 @@ export interface JwtPayload {
   username: string;
   email: string;
   role: UserRole;
+  moodleToken?: string;
   iat?: number;
   exp?: number;
 }

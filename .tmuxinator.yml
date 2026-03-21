@@ -44,6 +44,6 @@ windows:
         - Docker Logs:
             - echo "Use 'docker-compose logs -f [service]' to follow logs"
         - Database:
-            - echo "PostgreSQL: localhost:5432 | MariaDB: localhost:3306"
+            - 'echo "PostgreSQL: localhost:5432 | MariaDB: localhost:3306"'
         - Services:
-            - echo "Frontend: :3000 | Backend: :5000 | AI: :8000 | Moodle: :8080"
+            - 'echo "Frontend: :3000 | Backend: :5000 | AI: :8000 | Moodle: :8080"'

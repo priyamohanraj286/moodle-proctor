@@ -7,15 +7,22 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
-import fp from 'fastify-plugin';
 import config from './config';
 import logger from './config/logger';
 
 // Import plugins
 import postgresPlugin from './plugins/postgres';
+import securityModule from './modules/security';
+import websocketProxy from './plugins/websocket-proxy';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes';
+import studentRoutes from './modules/student/student.routes';
+import examRoutes from './modules/exam/exam.routes';
+import violationRoutes from './modules/violation/violation.routes';
+import teacherRoutes from './modules/teacher/teacher.routes';
+import teacherSSE from './modules/teacher/teacher.sse';
+import manualProctoringRoutes from './modules/manual-proctoring/manual-proctoring.routes';
 
 // ============================================================================
 // Create Fastify App
@@ -50,6 +57,15 @@ export async function createApp() {
 
   // PostgreSQL database
   await app.register(postgresPlugin);
+
+  // Security module
+  await app.register(securityModule);
+
+  // WebSocket proxy
+  await app.register(websocketProxy, {
+    prefix: '/ws',
+    aiServiceUrl: process.env.AI_SERVICE_URL || 'ws://localhost:8000/proctor'
+  });
 
   // ==========================================================================
   // Global Middleware
@@ -104,6 +120,12 @@ export async function createApp() {
   // ==========================================================================
 
   await app.register(authRoutes);
+  await app.register(studentRoutes);
+  await app.register(examRoutes);
+  await app.register(violationRoutes);
+  await app.register(teacherRoutes);
+  await app.register(teacherSSE);
+  await app.register(manualProctoringRoutes);
 
   // ==========================================================================
   // 404 Handler
@@ -140,9 +162,13 @@ export async function createApp() {
 
   const close = app.close.bind(app);
 
-  app.close = async () => {
+  app.close = async (closeListener?: () => void) => {
     logger.info('Closing application...');
     await close();
+    if (closeListener) {
+      closeListener();
+    }
+    return undefined as any;
   };
 
   return app;

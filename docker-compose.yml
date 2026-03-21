@@ -69,6 +69,28 @@ services:
       - proctor-network
 
   # ============================================================================
+  # DATABASE MIGRATIONS
+  # ============================================================================
+  migration:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: moodle-proctor-migration
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://proctor_user:proctor_pass@postgres:5432/moodle_proctor
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - proctor-network
+    command: ["npm", "run", "migrate"]
+    restart: "no"
+
+  # ============================================================================
   # UNIFIED BACKEND (Fastify + TypeScript)
   # ============================================================================
   backend:
@@ -79,6 +101,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migration:
+        condition: service_completed_successfully
       moodle:
         condition: service_started
     ports:
