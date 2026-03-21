@@ -1,0 +1,147 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # POSTGRESQL DATABASE (Proctoring Data)
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: moodle-proctor-db
+    environment:
+      POSTGRES_USER: proctor_user
+      POSTGRES_PASSWORD: proctor_pass
+      POSTGRES_DB: moodle_proctor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init:/docker-entrypoint-initdb.d  # Run init scripts
+    networks:
+      - proctor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proctor_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # MARIADB DATABASE (Moodle Database)
+  # ============================================================================
+  mariadb:
+    image: bitnamilegacy/mariadb:latest
+    container_name: local-moodle-db
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - MARIADB_USER=bn_moodle
+      - MARIADB_PASSWORD=bitnami
+      - MARIADB_DATABASE=bitnami_moodle
+    volumes:
+      - mariadb_data:/bitnami/mariadb
+    networks:
+      - proctor-network
+
+  # ============================================================================
+  # MOODLE LMS (Bitnami)
+  # ============================================================================
+  moodle:
+    image: bitnamilegacy/moodle:latest
+    container_name: local-moodle
+    depends_on:
+      - mariadb
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - MOODLE_DATABASE_HOST=mariadb
+      - MOODLE_DATABASE_PORT_NUMBER=3306
+      - MOODLE_DATABASE_USER=bn_moodle
+      - MOODLE_DATABASE_PASSWORD=bitnami
+      - MOODLE_DATABASE_NAME=bitnami_moodle
+      - MOODLE_USERNAME=admin
+      - MOODLE_PASSWORD=admin123!
+      - MOODLE_EMAIL=admin@example.com
+      - MOODLE_SITE_NAME=Local Moodle
+    volumes:
+      - moodle_data:/bitnami/moodle
+      - moodledata_data:/bitnami/moodledata
+    networks:
+      - proctor-network
+
+  # ============================================================================
+  # UNIFIED BACKEND (Fastify + TypeScript)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: moodle-proctor-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      moodle:
+        condition: service_started
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=postgresql://proctor_user:proctor_pass@postgres:5432/moodle_proctor
+      - MOODLE_BASE_URL=http://moodle:8080
+      - MOODLE_SERVICE=moodle_mobile_app
+      - JWT_SECRET=change-this-secret-in-production-use-openssl-rand-hex-32
+      - AI_SERVICE_URL=ws://ai-proctoring:8000/proctor
+      - LOG_LEVEL=info
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/uploads:/app/uploads  # For PDFs, screenshots
+      - ./backend/logs:/app/logs
+    networks:
+      - proctor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # AI PROCTORING SERVICE (Python/FastAPI)
+  # ============================================================================
+  ai-proctoring:
+    build:
+      context: ./ai_proctoring
+      dockerfile: Dockerfile
+    container_name: ai-proctoring-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai_proctoring:/app
+      - ./ai_proctoring/screenshots:/app/screenshots
+      - ./ai_proctoring/reports:/app/reports
+    networks:
+      - proctor-network
+    restart: unless-stopped
+    # GPU support (if available)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  proctor-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  mariadb_data:
+    driver: local
+  moodle_data:
+    driver: local
+  moodledata_data:
+    driver: local
