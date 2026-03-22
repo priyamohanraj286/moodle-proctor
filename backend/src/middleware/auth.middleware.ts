@@ -8,6 +8,11 @@ import jwtService from '../modules/auth/jwt.service';
 import authService from '../modules/auth/auth.service';
 import logger from '../config/logger';
 import { UnauthorizedError } from '../utils/errors';
+import {
+  getManualAuthUser,
+  getManualSessionFromRequest,
+  isManualProctoringRequest
+} from '../modules/manual-proctoring/manual-proctoring.compat';
 
 // ============================================================================
 // Auth Middleware
@@ -22,6 +27,22 @@ export async function authMiddleware(
   reply: FastifyReply
 ): Promise<void> {
   try {
+    if (isManualProctoringRequest(request as any)) {
+      const manualSession = getManualSessionFromRequest(request as any);
+
+      if (manualSession) {
+        (request as any).user = getManualAuthUser();
+        (request as any).tokenPayload = {
+          userId: getManualAuthUser().id,
+          username: getManualAuthUser().username,
+          email: getManualAuthUser().email,
+          role: getManualAuthUser().role,
+          exp: Math.floor(manualSession.expiresAt / 1000)
+        };
+        return;
+      }
+    }
+
     // Extract token from Authorization header
     const authHeader = request.headers.authorization;
 

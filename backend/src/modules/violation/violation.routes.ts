@@ -9,11 +9,10 @@ import { createViolationService } from './violation.service';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import type { ReportViolationRequest } from './violation.schema';
 import {
-  appendManualWarningLog,
-  buildManualStudent,
-  getLatestManualAttempt,
+  getManualSessionFromRequest,
   isManualProctoringRequest
 } from '../manual-proctoring/manual-proctoring.compat';
+import { recordManualViolation } from '../manual-proctoring/manual-proctoring.compat';
 
 // ============================================================================
 // Routes Plugin
@@ -56,20 +55,29 @@ export default fp(async (fastify: FastifyInstance) => {
     handler: async (request, reply) => {
       // @ts-ignore
       const userId = request.user.id;
-      // @ts-ignore
-      const user = request.user;
       const body = (request.body || {}) as ReportViolationRequest & { type?: string };
 
-      let manualAttempt = null as Awaited<ReturnType<typeof getLatestManualAttempt>> | null;
-      if (isManualProctoringRequest(request) && !body.attemptId) {
-        manualAttempt = await getLatestManualAttempt(fastify.pg as any, userId);
-        if (manualAttempt.attempt?.id != null) {
-          body.attemptId = manualAttempt.attempt.id;
-        }
-      }
+      if (isManualProctoringRequest(request)) {
+        const session = getManualSessionFromRequest(request as any);
 
-      if (isManualProctoringRequest(request) && !body.violationType) {
-        body.violationType = body.type || 'unknown';
+        if (!session) {
+          return reply.code(401).send({
+            success: false,
+            message: 'Invalid session'
+          });
+        }
+
+        const result = recordManualViolation(
+          body.type || body.violationType || 'unknown',
+          body.detail || '',
+          body.severity
+        );
+
+        return reply.code(result.statusCode).send({
+          success: result.success,
+          ...(result.message ? { message: result.message } : {}),
+          attempt: result.attempt
+        });
       }
 
       if (!body.attemptId || !body.violationType) {
@@ -86,28 +94,6 @@ export default fp(async (fastify: FastifyInstance) => {
 
       try {
         const result = await violationService.recordViolation(body, userId, signatureService);
-
-        if (isManualProctoringRequest(request)) {
-          appendManualWarningLog(
-            buildManualStudent(user, manualAttempt?.examName || 'Exam'),
-            {
-              type: body.violationType,
-              detail: body.detail,
-              severity: body.severity,
-              createdAt: body.timestamp || Date.now()
-            }
-          );
-
-          const latestAttempt = await getLatestManualAttempt(fastify.pg as any, userId);
-
-          return reply.send({
-            success: true,
-            message: latestAttempt.attempt?.status === 'submitted'
-              ? `Exam terminated after reaching ${latestAttempt.attempt.maxWarnings} warnings.`
-              : undefined,
-            attempt: latestAttempt.attempt
-          });
-        }
 
         // If auto-submit was triggered, return special status
         if (result.data.shouldAutoSubmit) {

@@ -8,9 +8,13 @@ import { FastifyInstance } from 'fastify';
 import { createExamService } from './exam.service';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import {
-  getFirstAvailableExamId,
   getLatestManualAttempt,
+  getManualSessionFromRequest,
   isManualProctoringRequest
+} from '../manual-proctoring/manual-proctoring.compat';
+import {
+  startManualExamAttempt,
+  submitManualExamAttempt
 } from '../manual-proctoring/manual-proctoring.compat';
 
 // ============================================================================
@@ -65,12 +69,26 @@ export default fp(async (fastify: FastifyInstance) => {
       // @ts-ignore
       const userId = request.user.id;
       const body = (request.body || {}) as { examId?: number };
-      let examId = body.examId;
 
-      if (isManualProctoringRequest(request) && !examId) {
-        examId = await getFirstAvailableExamId(fastify.pg as any) ?? undefined;
+      if (isManualProctoringRequest(request)) {
+        const session = getManualSessionFromRequest(request as any);
+
+        if (!session) {
+          return reply.code(401).send({
+            success: false,
+            message: 'Invalid session'
+          });
+        }
+
+        const result = startManualExamAttempt();
+        return reply.code(result.statusCode).send({
+          success: result.success,
+          ...(result.message ? { message: result.message } : {}),
+          attempt: result.attempt
+        });
       }
 
+      let examId = body.examId;
       if (!examId) {
         return reply.code(400).send({
           success: false,
@@ -86,28 +104,7 @@ export default fp(async (fastify: FastifyInstance) => {
       const userAgent = request.headers['user-agent'];
 
       try {
-        if (isManualProctoringRequest(request)) {
-          const latest = await getLatestManualAttempt(fastify.pg as any, userId);
-
-          if (latest.attempt?.status === 'submitted') {
-            return reply.code(409).send({
-              success: false,
-              message: 'This exam has already been submitted.',
-              attempt: latest.attempt
-            });
-          }
-        }
-
         const result = await examService.startExam(userId, examId, ipAddress, userAgent);
-
-        if (isManualProctoringRequest(request)) {
-          const { attempt } = await getLatestManualAttempt(fastify.pg as any, userId);
-
-          return reply.code(201).send({
-            success: true,
-            attempt
-          });
-        }
 
         return reply.code(201).send(result);
       } catch (error) {
@@ -203,12 +200,21 @@ export default fp(async (fastify: FastifyInstance) => {
       };
       const { attemptId, answers, submissionReason } = body;
 
-      let finalAttemptId = attemptId;
-      if (isManualProctoringRequest(request) && !finalAttemptId) {
-        const latest = await getLatestManualAttempt(fastify.pg as any, userId);
-        finalAttemptId = (latest.attempt as any)?.id;
+      if (isManualProctoringRequest(request)) {
+        const session = getManualSessionFromRequest(request as any);
+
+        if (!session) {
+          return reply.code(401).send({
+            success: false,
+            message: 'Invalid session'
+          });
+        }
+
+        const result = submitManualExamAttempt(submissionReason || body.reason || 'manual_submit');
+        return reply.send(result);
       }
 
+      const finalAttemptId = attemptId;
       if (!finalAttemptId) {
         return reply.code(404).send({
           success: false,
@@ -229,15 +235,6 @@ export default fp(async (fastify: FastifyInstance) => {
           submissionReason || body.reason || 'manual_submit',
           ipAddress
         );
-
-        if (isManualProctoringRequest(request)) {
-          const { attempt } = await getLatestManualAttempt(fastify.pg as any, userId);
-
-          return reply.send({
-            success: true,
-            attempt
-          });
-        }
 
         return reply.send(result);
       } catch (error) {

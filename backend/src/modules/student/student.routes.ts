@@ -12,6 +12,7 @@ import {
   buildManualStudent,
   getLatestManualAttempt,
   getManualQuestionPaperPath,
+  getManualSessionFromRequest,
   isManualProctoringRequest
 } from '../manual-proctoring/manual-proctoring.compat';
 
@@ -34,13 +35,20 @@ export default fp(async (fastify: FastifyInstance) => {
 
       try {
         if (isManualProctoringRequest(request)) {
-          // @ts-ignore
-          const user = request.user;
-          const { attempt, examName } = await getLatestManualAttempt(fastify.pg as any, userId);
+          const session = getManualSessionFromRequest(request as any);
+
+          if (!session) {
+            return reply.code(401).send({
+              success: false,
+              message: 'Invalid session'
+            });
+          }
+
+          const { attempt } = getLatestManualAttempt();
 
           return reply.send({
             success: true,
-            student: buildManualStudent(user, examName),
+            student: buildManualStudent(),
             attempt
           });
         }
@@ -101,7 +109,14 @@ export default fp(async (fastify: FastifyInstance) => {
       const { filename } = request.params as { filename: string };
 
       if (isManualProctoringRequest(request)) {
-        await authMiddleware(request, reply);
+        const session = getManualSessionFromRequest(request as any);
+
+        if (!session) {
+          return reply.code(401).send({
+            success: false,
+            message: 'Invalid session'
+          });
+        }
 
         const filePath = getManualQuestionPaperPath(filename);
 
