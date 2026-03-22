@@ -53,6 +53,20 @@ interface ManualViolationRow {
   occurred_at: Date;
 }
 
+interface ManualUserRow {
+  id: number;
+  moodleUserId: number;
+  username: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: 'student' | 'teacher';
+  profileImageUrl: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLoginAt: Date | null;
+}
+
 export function isManualProctoringRequest(request: { headers: Record<string, unknown> }): boolean {
   const headerValue = request.headers[MANUAL_PROCTORING_HEADER];
   if (Array.isArray(headerValue)) {
@@ -106,10 +120,20 @@ export async function getLatestManualAttempt(pg: Pool, userId: number): Promise<
   );
 
   if (attemptResult.rows.length === 0) {
+    const examResult = await pg.query<{
+      exam_name: string;
+      question_paper_path: string | null;
+    }>(
+      `SELECT exam_name, question_paper_path
+      FROM exams
+      ORDER BY created_at ASC
+      LIMIT 1`
+    );
+
     return {
       attempt: null,
-      examName: 'No exam',
-      questionPaper: 'question-paper.pdf'
+      examName: examResult.rows[0]?.exam_name || 'No exam',
+      questionPaper: getManualQuestionPaperFilename(examResult.rows[0])
     };
   }
 
@@ -190,6 +214,61 @@ export async function getFirstAvailableExamId(pg: Pool): Promise<number | null> 
   );
 
   return result.rows[0]?.id ?? null;
+}
+
+export async function findManualUserByIdentifier(
+  pg: Pool,
+  identifier: string
+): Promise<ManualUserRow | null> {
+  const result = await pg.query<ManualUserRow>(
+    `SELECT
+      id,
+      moodle_user_id as "moodleUserId",
+      username,
+      email,
+      first_name as "firstName",
+      last_name as "lastName",
+      role,
+      profile_image_url as "profileImageUrl",
+      created_at as "createdAt",
+      updated_at as "updatedAt",
+      last_login_at as "lastLoginAt"
+    FROM users
+    WHERE username = $1 OR email = $1
+    LIMIT 1`,
+    [identifier]
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function ensureManualDevData(pg: Pool): Promise<void> {
+  const userCheck = await pg.query<{ id: number }>(
+    `SELECT id FROM users WHERE username = 'user' OR email = 'user' LIMIT 1`
+  );
+
+  if (userCheck.rows.length === 0) {
+    await pg.query(
+      `INSERT INTO users (
+        moodle_user_id, username, email, first_name, last_name, role, profile_image_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [900001, 'user', 'user', 'Test', 'User', 'student', null]
+    );
+  }
+
+  const examCheck = await pg.query<{ id: number }>(
+    `SELECT id FROM exams WHERE exam_name = 'IoT Final Exam' LIMIT 1`
+  );
+
+  if (examCheck.rows.length === 0) {
+    await pg.query(
+      `INSERT INTO exams (
+        moodle_course_id, moodle_course_module_id, exam_name, course_name,
+        duration_minutes, max_warnings, question_paper_path
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [900001, 900001, 'IoT Final Exam', 'Internet of Things', 10, 15, '/manual-proctoring/question-paper.pdf']
+    );
+  }
 }
 
 export function buildManualStudent(user: ManualUser, examName: string): {
