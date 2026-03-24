@@ -1,11 +1,8 @@
-// ============================================================================
-// useWebRTC Hook
-// Manages WebRTC connections, MediaSoup transport, and streaming
-// ============================================================================
-
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Device } from 'mediasoup-client';
+import type { Consumer, DtlsParameters, RtpCapabilities, Transport } from 'mediasoup-client/types';
 
 export interface WebRTCPeerInfo {
   peerId: string;
@@ -31,8 +28,38 @@ interface WebRTCConfig {
   userId: number;
   studentName: string;
   backendUrl: string;
-  signalingUrl?: string;
 }
+
+interface BackendTransportParams {
+  transportId: string;
+  iceParameters: Record<string, unknown>;
+  iceCandidates: Array<Record<string, unknown>>;
+  dtlsParameters: DtlsParameters;
+}
+
+interface JoinPeerResponse {
+  peerId: string;
+  userId: number;
+  studentName: string;
+  transport: BackendTransportParams;
+  routerRtpCapabilities: RtpCapabilities;
+}
+
+interface AvailableConsumer {
+  producerId: string;
+  peerId: string;
+  studentName: string;
+  kind: 'audio' | 'video';
+}
+
+interface CreateConsumerResponse {
+  id: string;
+  producerId: string;
+  kind: 'audio' | 'video';
+  rtpParameters: Record<string, unknown>;
+}
+
+const CONSUMER_POLL_INTERVAL_MS = 3000;
 
 export function useWebRTC(config: WebRTCConfig) {
   const [peers, setPeers] = useState<Map<string, WebRTCPeerInfo>>(new Map());
@@ -40,255 +67,309 @@ export function useWebRTC(config: WebRTCConfig) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const localStream = useRef<MediaStream | null>(null);
-  const routerRtpCapabilities = useRef<Record<string, unknown> | null>(null);
-  const transports = useRef<Map<string, any>>(new Map());
+  const deviceRef = useRef<Device | null>(null);
+  const recvTransportRef = useRef<Transport | null>(null);
+  const consumerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consumersRef = useRef<Map<string, Consumer>>(new Map());
+  const consumerMetaRef = useRef<Map<string, AvailableConsumer>>(new Map());
+  const connectedRef = useRef(false);
 
-  /**
-   * Initialize local media stream
-   */
-  const initializeLocalStream = useCallback(async () => {
-    if (config.studentName === 'Teacher') {
-      return null;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      localStream.current = stream;
-      return stream;
-    } catch (err) {
-      const message = `Failed to get user media: ${err}`;
-      setError(message);
-      console.error(message);
-      throw err;
+  const clearConsumerPoll = useCallback(() => {
+    if (consumerPollRef.current) {
+      clearInterval(consumerPollRef.current);
+      consumerPollRef.current = null;
     }
   }, []);
 
-  /**
-   * Join room
-   */
+  const resetState = useCallback(() => {
+    setIsConnected(false);
+    setPeers(new Map());
+    setStreams(new Map());
+    consumerMetaRef.current.clear();
+  }, []);
+
+  const fetchJson = useCallback(
+    async <T,>(input: string, init?: RequestInit): Promise<T> => {
+      const response = await fetch(input, {
+        credentials: 'include',
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(init?.headers || {}),
+        },
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || `Request failed: ${response.status}`);
+      }
+
+      return response.json() as Promise<T>;
+    },
+    []
+  );
+
+  const ensureRoom = useCallback(async () => {
+    const roomUrl = `${config.backendUrl}/api/webrtc/rooms/${config.roomId}`;
+
+    const roomResponse = await fetch(roomUrl, {
+      credentials: 'include',
+    });
+
+    if (roomResponse.ok) {
+      return;
+    }
+
+    if (roomResponse.status !== 404) {
+      const errorBody = await roomResponse.json().catch(() => ({}));
+      throw new Error(errorBody.error || 'Failed to inspect room');
+    }
+
+    await fetchJson(`${config.backendUrl}/api/webrtc/rooms`, {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: config.roomId,
+        examId: 0,
+      }),
+    });
+  }, [config.backendUrl, config.roomId, fetchJson]);
+
+  const syncPeers = useCallback((availableConsumers: AvailableConsumer[]) => {
+    setPeers(prev => {
+      const updated = new Map(prev);
+
+      for (const consumer of availableConsumers) {
+        updated.set(consumer.peerId, {
+          peerId: consumer.peerId,
+          studentName: consumer.studentName,
+          userId: 0,
+          isProducing: true,
+          connectionState: 'connected',
+          videoEnabled: true,
+          audioEnabled: true,
+        });
+
+        consumerMetaRef.current.set(consumer.producerId, consumer);
+      }
+
+      return updated;
+    });
+  }, []);
+
+  const removeConsumerState = useCallback((producerId: string) => {
+    const meta = consumerMetaRef.current.get(producerId);
+    consumerMetaRef.current.delete(producerId);
+    consumersRef.current.delete(producerId);
+
+    setStreams(prev => {
+      const updated = new Map(prev);
+      updated.delete(producerId);
+      return updated;
+    });
+
+    if (!meta) {
+      return;
+    }
+
+    setPeers(prev => {
+      const updated = new Map(prev);
+      const stillHasProducer = Array.from(consumerMetaRef.current.values()).some(
+        consumer => consumer.peerId === meta.peerId
+      );
+
+      if (!stillHasProducer) {
+        updated.delete(meta.peerId);
+      }
+
+      return updated;
+    });
+  }, []);
+
+  const consumeAvailableProducers = useCallback(async () => {
+    const device = deviceRef.current;
+    const recvTransport = recvTransportRef.current;
+
+    if (!device || !recvTransport) {
+      return;
+    }
+
+    const { consumers } = await fetchJson<{ consumers: AvailableConsumer[] }>(
+      `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consumers`
+    );
+
+    syncPeers(consumers);
+
+    for (const consumerInfo of consumers) {
+      if (consumersRef.current.has(consumerInfo.producerId)) {
+        continue;
+      }
+
+      const consumerParams = await fetchJson<CreateConsumerResponse>(
+        `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consume`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            producerId: consumerInfo.producerId,
+            rtpCapabilities: device.recvRtpCapabilities,
+          }),
+        }
+      );
+
+      const consumer = await recvTransport.consume({
+        id: consumerParams.id,
+        producerId: consumerParams.producerId,
+        kind: consumerParams.kind,
+        rtpParameters: consumerParams.rtpParameters as any,
+      });
+
+      consumersRef.current.set(consumerInfo.producerId, consumer);
+
+      const mediaStream = new MediaStream([consumer.track]);
+
+      setStreams(prev => {
+        const updated = new Map(prev);
+        updated.set(consumerInfo.producerId, {
+          producerId: consumerInfo.producerId,
+          peerId: consumerInfo.peerId,
+          studentName: consumerInfo.studentName,
+          stream: mediaStream,
+          kind: consumerInfo.kind,
+        });
+        return updated;
+      });
+
+      await fetchJson(
+        `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consumers/${consumerInfo.producerId}/resume`,
+        {
+          method: 'POST',
+        }
+      );
+
+      consumer.on('transportclose', () => {
+        removeConsumerState(consumerInfo.producerId);
+      });
+
+      consumer.on('trackended', () => {
+        removeConsumerState(consumerInfo.producerId);
+      });
+    }
+  }, [config.backendUrl, config.peerId, config.roomId, fetchJson, removeConsumerState, syncPeers]);
+
   const joinRoom = useCallback(async () => {
     try {
       setError(null);
+      await ensureRoom();
 
-      // Initialize local stream
-      await initializeLocalStream();
-
-      // Create room on backend
-      const roomRes = await fetch(
-        `${config.backendUrl}/api/webrtc/rooms/${config.roomId}`,
-        {
-          credentials: 'include',
-        }
-      );
-
-      if (!roomRes.ok) {
-        // Room doesn't exist, create it
-        await fetch(`${config.backendUrl}/api/webrtc/rooms`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            roomId: config.roomId,
-            examId: 0,
-          }),
-          credentials: 'include',
-        });
-      }
-
-      // Add peer to room and get transport
-      const peerRes = await fetch(
+      const joinResponse = await fetchJson<JoinPeerResponse>(
         `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             peerId: config.peerId,
-            userId: config.userId,
             studentName: config.studentName,
           }),
-          credentials: 'include',
         }
       );
 
-      if (!peerRes.ok) {
-        throw new Error('Failed to join room');
-      }
+      const device = await Device.factory();
+      await device.load({
+        routerRtpCapabilities: joinResponse.routerRtpCapabilities,
+      });
 
-      const { transport, routerRtpCapabilities: nextRouterRtpCapabilities } =
-        await peerRes.json();
+      deviceRef.current = device;
 
-      transports.current.set(config.peerId, transport);
-      routerRtpCapabilities.current = nextRouterRtpCapabilities || null;
+      const recvTransport = device.createRecvTransport({
+        id: joinResponse.transport.transportId,
+        iceParameters: joinResponse.transport.iceParameters as any,
+        iceCandidates: joinResponse.transport.iceCandidates as any,
+        dtlsParameters: joinResponse.transport.dtlsParameters,
+      });
 
-      const connectRes = await fetch(
-        `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/connect-transport`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            dtlsParameters: transport.dtlsParameters,
-          }),
-          credentials: 'include',
-        }
-      );
-
-      if (!connectRes.ok) {
-        throw new Error('Failed to connect transport');
-      }
-
-      if (localStream.current) {
-        for (const track of localStream.current.getTracks()) {
-          const produceRes = await fetch(
-            `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/produce`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                kind: track.kind,
-                rtpParameters: routerRtpCapabilities.current || {},
-              }),
-              credentials: 'include',
-            }
-          );
-
-          if (!produceRes.ok) {
-            throw new Error(`Failed to create ${track.kind} producer`);
+      recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+        fetchJson(
+          `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/connect-transport`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              dtlsParameters,
+            }),
           }
+        )
+          .then(() => callback())
+          .catch(error => errback(error instanceof Error ? error : new Error(String(error))));
+      });
+
+      recvTransport.on('connectionstatechange', state => {
+        if (state === 'connected') {
+          connectedRef.current = true;
+          setIsConnected(true);
+          return;
         }
-      }
 
-      const consumersRes = await fetch(
-        `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consumers`,
-        {
-          credentials: 'include',
+        if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+          connectedRef.current = false;
+          setIsConnected(false);
         }
-      );
+      });
 
-      const { consumers } = await consumersRes.json();
+      recvTransportRef.current = recvTransport;
 
-      for (const consumer of consumers) {
-        try {
-          const consumerRes = await fetch(
-            `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consume`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                producerId: consumer.producerId,
-                rtpCapabilities: routerRtpCapabilities.current || {},
-              }),
-              credentials: 'include',
-            }
-          );
-
-          if (consumerRes.ok) {
-            await consumerRes.json();
-
-            await fetch(
-              `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consumers/${consumer.producerId}/resume`,
-              {
-                method: 'POST',
-                credentials: 'include',
-              }
-            );
-
-            setPeers((prev) => {
-              const updated = new Map(prev);
-              updated.set(consumer.peerId, {
-                peerId: consumer.peerId,
-                studentName: consumer.studentName,
-                userId: 0,
-                isProducing: true,
-                connectionState: 'connected',
-                videoEnabled: true,
-                audioEnabled: true,
-                });
-              return updated;
-            });
-
-            setStreams((prev) => {
-              if (prev.has(consumer.producerId)) {
-                return prev;
-              }
-
-              const updated = new Map(prev);
-              updated.set(consumer.producerId, {
-                producerId: consumer.producerId,
-                peerId: consumer.peerId,
-                studentName: consumer.studentName,
-                stream: new MediaStream(),
-                kind: consumer.kind,
-              });
-              return updated;
-            });
-          }
-        } catch (err) {
-          console.error(`Failed to consume ${consumer.peerId}:`, err);
-        }
-      }
-
-      setIsConnected(true);
+      await consumeAvailableProducers();
+      clearConsumerPoll();
+      consumerPollRef.current = setInterval(() => {
+        consumeAvailableProducers().catch(err => {
+          console.error('Failed to refresh WebRTC consumers:', err);
+        });
+      }, CONSUMER_POLL_INTERVAL_MS);
     } catch (err) {
       const message = `Failed to join room: ${err}`;
       setError(message);
       console.error(message);
     }
-  }, [config, initializeLocalStream]);
+  }, [
+    clearConsumerPoll,
+    config.backendUrl,
+    config.peerId,
+    config.roomId,
+    config.studentName,
+    consumeAvailableProducers,
+    ensureRoom,
+    fetchJson,
+  ]);
 
-  /**
-   * Leave room
-   */
   const leaveRoom = useCallback(async () => {
     try {
-      if (localStream.current) {
-        localStream.current.getTracks().forEach((track) => track.stop());
-        localStream.current = null;
-      }
+      clearConsumerPoll();
 
-      // Notify backend
+      for (const consumer of consumersRef.current.values()) {
+        consumer.close();
+      }
+      consumersRef.current.clear();
+      consumerMetaRef.current.clear();
+
+      recvTransportRef.current?.close();
+      recvTransportRef.current = null;
+      deviceRef.current = null;
+
       await fetch(
         `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}`,
         {
           method: 'DELETE',
           credentials: 'include',
         }
-      ).catch(() => {}); // Ignore errors
+      ).catch(() => {});
 
-      setIsConnected(false);
-      setPeers(new Map());
-      setStreams(new Map());
+      connectedRef.current = false;
+      resetState();
     } catch (err) {
       console.error('Error leaving room:', err);
     }
-  }, [config]);
+  }, [clearConsumerPoll, config.backendUrl, config.peerId, config.roomId, resetState]);
 
-  /**
-   * Get local stream
-   */
-  const getLocalStream = useCallback(() => localStream.current, []);
+  const getLocalStream = useCallback(() => null, []);
 
-  /**
-   * Get remote streams
-   */
-  const getRemoteStreams = useCallback(() => {
-    return Array.from(streams.values());
-  }, [streams]);
+  const getRemoteStreams = useCallback(() => Array.from(streams.values()), [streams]);
 
-  /**
-   * Cleanup on unmount
-   */
   useEffect(() => {
     return () => {
       leaveRoom().catch(console.error);
