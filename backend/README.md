@@ -1,363 +1,112 @@
 # Moodle-Proctor Backend
 
-> Unified Fastify + TypeScript backend for the Moodle-Proctor system
+Unified Fastify + TypeScript backend for the current repo architecture.
 
-## Status: Foundation Complete ✅
+## Current Role In The Repo
 
-The backend foundation has been successfully implemented with core infrastructure. Several features remain to be completed.
+This is the active backend service for:
 
----
+- Moodle-backed authentication
+- student and exam APIs
+- violation recording
+- teacher dashboard APIs
+- server-sent events for live updates
+- WebSocket proxying to the AI proctoring service
+- manual proctoring compatibility for the Electron client in `manual_proctoring/`
 
-## ✅ Completed Components
+The legacy Express backend under `manual_proctoring/backend/` is archived and should not be used for normal development.
 
-### 1. Docker Infrastructure
-- **Root docker-compose.yml** - All services configured (PostgreSQL, Moodle, Backend, AI Proctoring)
-- **Backend Dockerfile** - Multi-stage production-ready build
-- **Environment Configuration** - .env.example with all required variables
+## Status
 
-### 2. Database Schema
-- **Migration 001** - Core schema (users, exams, exam_attempts, violations, proctoring_sessions, audit_logs)
-- **Migration 002** - Performance indexes for all tables
-- **Migration 003** - Security fields for violations (integrity_hash, ai_signature, client_ip, session_id)
+- Active and typechecking
+- Used by the Electron manual proctoring client
+- Intended to be the single backend entrypoint for repo-level integration work
 
-### 3. Configuration Module
-- **config/index.ts** - Centralized environment variable loading
-- **config/logger.ts** - Winston logger with file/console transports
-- **config/moodle.ts** - Moodle integration configuration (embedded in index.ts)
-- **config/jwt.ts** - JWT configuration (embedded in index.ts)
-
-### 4. PostgreSQL Plugin
-- **plugins/postgres.ts** - Database connection with pooling
-- Health checks
-- Graceful shutdown
-- Query helpers
-
-### 5. Authentication Module
-- **modules/auth/moodle.service.ts** - Moodle API integration
-  - Token authentication
-  - User validation
-  - User sync
-
-- **modules/auth/jwt.service.ts** - JWT token management
-  - Token generation/validation
-  - Moodle token encryption (AES-256-GCM)
-  - Token refresh
-
-- **modules/auth/auth.service.ts** - Combined auth service
-  - Login flow
-  - User lookup/creation
-  - Logout handling
-
-- **modules/auth/auth.routes.ts** - Auth API endpoints
-  - POST /api/auth/login
-  - POST /api/auth/logout
-  - GET /api/auth/me
-  - POST /api/auth/validate
-  - POST /api/auth/refresh
-
-### 6. Middleware
-- **middleware/auth.middleware.ts** - JWT validation
-  - authMiddleware (required auth)
-  - optionalAuthMiddleware (optional auth)
-  - requireRole factory (role-based auth)
-  - requireTeacher / requireStudent helpers
-
-### 7. Utilities
-- **types/index.ts** - TypeScript type definitions
-- **utils/errors.ts** - Custom error classes
-
-### 8. Application Structure
-- **app.ts** - Fastify app configuration with all plugins
-- **index.ts** - Application entry point
-
----
-
-## 🚧 Pending Implementation
-
-### Priority 1: Core Functionality
-1. **Student Module** (`modules/student/`)
-   - GET /api/student - Student profile + attempt status
-   - GET /api/session - Session validation
-   - GET /files/:filename - Static file serving
-
-2. **Exam Module** (`modules/exam/`)
-   - GET /api/exam - Exam details
-   - POST /api/exam/start - Start/resume exam
-   - POST /api/exam/submit - Submit exam
-   - GET /api/questions - Question summary
-
-3. **Violation Module** (`modules/violation/`)
-   - POST /api/exam/violations - Report violation
-   - Store in PostgreSQL
-   - Auto-submit at 15 warnings
-
-### Priority 2: Security Components
-4. **Security Module** (`modules/security/`)
-   - **signature.service.ts** - HMAC-SHA256 signatures
-   - **replay-prevention.ts** - Frame sequence tracking
-   - **rate-limiter.ts** - Violation rate limiting
-
-### Priority 3: WebSocket Integration
-5. **WebSocket Proxy** (`plugins/websocket-proxy.ts`)
-   - Secure connection establishment
-   - Bidirectional message forwarding with signing
-   - Secure violation capture & storage
-   - Replay attack prevention
-   - Rate limiting
-   - Session tracking
-   - Error handling & fail-safe
-
-### Priority 4: Teacher Dashboard
-6. **Teacher Module** (`modules/teacher/`)
-   - GET /api/teacher/exams
-   - GET /api/teacher/exams/:id
-   - GET /api/teacher/attempts
-   - GET /api/teacher/attempts/:id
-   - GET /api/teacher/attempts/:id/violations
-   - GET /api/teacher/students
-   - GET /api/teacher/reports
-   - GET /api/teacher/stats
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL 15+
-- Moodle instance (included in docker-compose)
-
-### Setup
-
-1. **Clone and navigate to backend**:
-   ```bash
-   cd /home/aryaniyaps/web-projects/moodle-proctor/backend
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Copy environment template**:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. **Edit .env** with your configuration:
-   ```env
-   NODE_ENV=development
-   PORT=5000
-   DATABASE_URL=postgresql://proctor_user:proctor_pass@localhost:5432/moodle_proctor
-   MOODLE_BASE_URL=http://localhost:8080
-   MOODLE_SERVICE=moodle_mobile_app
-   JWT_SECRET=your-super-secret-jwt-key-change-in-production
-   AI_SERVICE_URL=ws://localhost:8000/proctor
-   ```
-
-5. **Start services with Docker Compose** (from project root):
-   ```bash
-   cd /home/aryaniyaps/web-projects/moodle-proctor
-   docker-compose up -d postgres moodle
-   ```
-
-6. **Run database migrations** (when migration runner is implemented):
-   ```bash
-   npm run migrate:up
-   ```
-
-7. **Start development server**:
-   ```bash
-   npm run dev
-   ```
-
-8. **Check health endpoint**:
-   ```bash
-   curl http://localhost:5000/health
-   ```
-
----
-
-## 📁 Project Structure
-
-```
-backend/
-├── src/
-│   ├── index.ts                    # ✅ Entry point
-│   ├── app.ts                      # ✅ Fastify app config
-│   ├── config/
-│   │   ├── index.ts                # ✅ Config loader
-│   │   ├── logger.ts               # ✅ Winston logger
-│   │   └── ...moodle/jwt configs   # ✅ Embedded in index.ts
-│   ├── plugins/
-│   │   ├── postgres.ts             # ✅ Database plugin
-│   │   └── websocket-proxy.ts      # 🚧 TODO
-│   ├── modules/
-│   │   ├── auth/                   # ✅ Complete
-│   │   │   ├── auth.service.ts
-│   │   │   ├── moodle.service.ts
-│   │   │   ├── jwt.service.ts
-│   │   │   └── auth.routes.ts
-│   │   ├── student/                # 🚧 TODO
-│   │   ├── exam/                   # 🚧 TODO
-│   │   ├── violation/              # 🚧 TODO
-│   │   ├── teacher/                # 🚧 TODO
-│   │   └── security/               # 🚧 TODO
-│   ├── middleware/
-│   │   ├── auth.middleware.ts      # ✅ Complete
-│   │   └── error.handler.ts        # 🚧 TODO (in app.ts)
-│   ├── db/
-│   │   └── migrations/
-│   │       ├── 001_initial_schema.sql    # ✅ Complete
-│   │       ├── 002_add_indexes.sql        # ✅ Complete
-│   │       └── 003_security_fields.sql    # ✅ Complete
-│   ├── types/
-│   │   └── index.ts                # ✅ Complete
-│   └── utils/
-│       ├── logger.ts               # ✅ In config/logger.ts
-│       └── errors.ts               # ✅ Complete
-├── db/
-│   └── init/                       # Docker init scripts
-├── logs/                           # Application logs
-├── uploads/                        # File uploads
-├── .env.example                    # ✅ Complete
-├── Dockerfile                      # ✅ Complete
-├── tsconfig.json                   # ✅ Complete
-├── package.json                    # ✅ Complete
-└── README.md                       # This file
-```
-
----
-
-## 🔐 Security Features Implemented
-
-- ✅ JWT-based authentication
-- ✅ Moodle token encryption (AES-256-GCM)
-- ✅ Role-based access control (student/teacher)
-- ✅ Database security fields (integrity_hash, ai_signature)
-- ✅ Audit logging schema
-- ✅ Unique constraints to prevent duplicate violations
-- 🚧 Message signing (HMAC-SHA256) - TODO
-- 🚧 Replay attack prevention - TODO
-- 🚧 Rate limiting - TODO
-
----
-
-## 📝 API Endpoints
-
-### Authentication (Implemented ✅)
-```
-POST   /api/auth/login          # Login with Moodle credentials
-POST   /api/auth/logout         # Logout
-GET    /api/auth/me             # Get current user
-POST   /api/auth/validate       # Validate token
-POST   /api/auth/refresh        # Refresh token
-```
-
-### Health Check (Implemented ✅)
-```
-GET    /health                   # Health status
-```
-
-### Student (TODO 🚧)
-```
-GET    /api/student             # Student profile + attempt
-GET    /api/session             # Session validation
-GET    /files/:filename         # Static files
-```
-
-### Exam (TODO 🚧)
-```
-GET    /api/exam                # Exam details
-POST   /api/exam/start          # Start exam
-POST   /api/exam/submit         # Submit exam
-GET    /api/questions           # Question summary
-```
-
-### Violations (TODO 🚧)
-```
-POST   /api/exam/violations     # Report violation
-```
-
-### Teacher Dashboard (TODO 🚧)
-```
-GET    /api/teacher/exams       # List exams
-GET    /api/teacher/attempts    # List attempts
-GET    /api/teacher/reports     # Generate reports
-GET    /api/teacher/stats       # Dashboard stats
-```
-
-### WebSocket (TODO 🚧)
-```
-WS     /ws/proctor              # AI service proxy
-```
-
----
-
-## 🧪 Testing
-
-When implemented:
-```bash
-npm test                # Run tests
-npm run test:watch      # Watch mode
-```
-
----
-
-## 🏗️ Building for Production
+## Run
 
 ```bash
-npm run build           # Compile TypeScript
-npm start              # Run production server
+cd backend
+npm install
+npm run dev
 ```
 
-Or with Docker:
+Default local URL: `http://localhost:5000`
+
+Health check:
+
 ```bash
-docker-compose up -d backend
+curl http://localhost:5000/health
 ```
 
----
+## Core Scripts
 
-## 📚 Next Steps
+```bash
+npm run dev
+npm run build
+npm start
+npm run migrate
+npm run migrate:status
+npm run seed
+npm run seed:clear
+npm test
+```
 
-1. **Implement Student Module** - Basic student API endpoints
-2. **Implement Exam Module** - Exam attempt management
-3. **Implement Violation Module** - Violation tracking
-4. **Implement Security Components** - Signature, replay prevention, rate limiting
-5. **Implement WebSocket Proxy** - Secure AI service integration
-6. **Implement Teacher Module** - Teacher dashboard APIs
-7. **Add Migration Runner** - For applying database migrations
-8. **Add Unit Tests** - Comprehensive test coverage
-9. **Add Integration Tests** - API endpoint tests
+## Active Backend Modules
 
----
+- `src/modules/auth/`
+- `src/modules/student/`
+- `src/modules/exam/`
+- `src/modules/violation/`
+- `src/modules/teacher/`
+- `src/modules/manual-proctoring/`
+- `src/modules/security/`
+- `src/plugins/websocket-proxy.ts`
 
-## 🐛 Troubleshooting
+## API Surface At A Glance
 
-### Database Connection Failed
-- Check PostgreSQL is running: `docker ps | grep postgres`
-- Verify DATABASE_URL in .env
-- Check database logs: `docker logs moodle-proctor-db`
+Authentication:
 
-### Moodle Authentication Failed
-- Check Moodle is running: `docker ps | grep moodle`
-- Verify MOODLE_BASE_URL is accessible
-- Check MOODLE_SERVICE exists in Moodle
-- Moodle admin: http://localhost:8080 (admin/admin123!)
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/auth/validate`
+- `POST /api/auth/refresh`
 
-### Module Not Found Errors
-- Run `npm install` to install dependencies
-- Check TypeScript compilation: `npm run build`
+Student/manual client:
 
----
+- `GET /api/student`
+- `GET /api/session`
+- `GET /api/exam`
+- `GET /api/questions`
+- `POST /api/exam/start`
+- `POST /api/exam/submit`
+- `POST /api/exam/violations`
+- `GET /files/:filename`
 
-## 📄 License
+Teacher/dashboard:
 
-MIT
+- `GET /api/teacher/exams`
+- `GET /api/teacher/exams/:id`
+- `GET /api/teacher/attempts`
+- `GET /api/teacher/attempts/:id`
+- `GET /api/teacher/attempts/:id/violations`
+- `GET /api/teacher/students`
+- `GET /api/teacher/reports`
+- `GET /api/teacher/stats`
+- `GET /api/teacher/events`
 
----
+Real-time:
 
-**Last Updated**: 2025-01-15
-**Version**: 1.0.0 (Foundation)
-**Status**: Ready for continued development
+- `WS /ws/proctor`
+
+## Integration Notes
+
+- `manual_proctoring/` uses this backend at `http://localhost:5000`.
+- The manual client identifies itself with the `X-Manual-Proctoring-Client` header.
+- AI proctoring runs separately in `ai_proctoring/` and is reached through the backend WebSocket proxy.
+
+## Known Limitations
+
+- Some auth and role-handling paths are still prototype-grade.
+- Teacher/dashboard and frontend integration are present, but the wider product is not fully production-hardened.
+- The repo still contains historical docs written before the manual backend migration and archive cleanup.

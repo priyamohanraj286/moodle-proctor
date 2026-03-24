@@ -1207,7 +1207,11 @@ NEXT_PUBLIC_API_URL=https://api.example.com
 
 ### From Legacy Express Backend
 
-**Legacy file**: `/manual_proctoring/backend/server.js` (replaced at runtime by the manual compatibility layer in `backend/src/modules/manual-proctoring/`)
+**Archived files**:
+- `/manual_proctoring/backend/server.js` now acts as an archive guard stub
+- `/manual_proctoring/backend/server.legacy.js` preserves the old Express implementation
+
+**Current runtime replacement**: `backend/src/modules/manual-proctoring/`
 
 **Migration Steps**:
 1. Maintain same API contracts for backward compatibility
