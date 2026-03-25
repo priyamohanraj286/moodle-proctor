@@ -6,7 +6,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:3000";
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:5000";
 
 export async function POST(req: Request) {
   try {
@@ -31,12 +34,26 @@ export async function POST(req: Request) {
       body: JSON.stringify({ username, password }),
     });
 
-    const data = (await response.json().catch(() => ({}))) as {
+    const rawBody = await response.text();
+    let data = {} as {
       success?: boolean;
       token?: string;
       user?: unknown;
       error?: string;
     };
+
+    if (rawBody) {
+      try {
+        data = JSON.parse(rawBody) as typeof data;
+      } catch {
+        return NextResponse.json(
+          {
+            error: `Backend at ${BACKEND_URL} returned a non-JSON response`,
+          },
+          { status: 502 }
+        );
+      }
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -63,7 +80,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: "Invalid response from backend" },
+      {
+        error: `Invalid response from backend at ${BACKEND_URL}`,
+      },
       { status: 500 }
     );
   } catch (err) {
