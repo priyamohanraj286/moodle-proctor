@@ -161,7 +161,7 @@ export class ProctoringRoomService {
     }
 
     // 4. Generate unique room code (retry 3x on collision)
-    let roomCode: string;
+    let roomCode: string = '';
     let attempts = 0;
     const maxAttempts = 3;
 
