@@ -28,6 +28,29 @@ export class WebRTCService {
   private rooms = new Map<string, WebRTCRoom>();
   private peers = new Map<string, WebRTCPeer>();
 
+  private async disposePeer(room: WebRTCRoom, peerId: string): Promise<void> {
+    const peer = room.peers.get(peerId);
+
+    if (!peer) {
+      return;
+    }
+
+    for (const consumer of peer.consumers.values()) {
+      await consumer.close();
+    }
+
+    for (const producer of peer.producers.values()) {
+      await producer.close();
+    }
+
+    if (peer.transport) {
+      await peer.transport.close();
+    }
+
+    room.peers.delete(peerId);
+    this.peers.delete(peerId);
+  }
+
   /**
    * Initialize MediaSoup worker
    */
@@ -110,6 +133,11 @@ export class WebRTCService {
       room = await this.createRoom(roomId, 0); // examId can be 0 for now
     }
 
+    if (room.peers.has(peerId)) {
+      await this.disposePeer(room, peerId);
+      logger.info(`Replaced existing peer: ${peerId} in room: ${roomId}`);
+    }
+
     const peer: WebRTCPeer = {
       peerId,
       userId,
@@ -144,23 +172,7 @@ export class WebRTCService {
     const peer = room.peers.get(peerId);
 
     if (peer) {
-      // Close all consumers
-      for (const consumer of peer.consumers.values()) {
-        await consumer.close();
-      }
-
-      // Close producer
-      for (const producer of peer.producers.values()) {
-        await producer.close();
-      }
-
-      // Close transport
-      if (peer.transport) {
-        await peer.transport.close();
-      }
-
-      room.peers.delete(peerId);
-      this.peers.delete(peerId);
+      await this.disposePeer(room, peerId);
 
       logger.info(`Removed peer: ${peerId} from room: ${roomId}`);
     }

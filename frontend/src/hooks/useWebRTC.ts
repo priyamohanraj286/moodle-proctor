@@ -72,6 +72,8 @@ export function useWebRTC(config: WebRTCConfig) {
   const consumerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consumersRef = useRef<Map<string, Consumer>>(new Map());
   const consumerMetaRef = useRef<Map<string, AvailableConsumer>>(new Map());
+  const producerStreamKeyRef = useRef<Map<string, string>>(new Map());
+  const activeProducerByStreamKeyRef = useRef<Map<string, string>>(new Map());
   const connectedRef = useRef(false);
   const joinStateRef = useRef<'idle' | 'joining' | 'joined'>('idle');
 
@@ -87,6 +89,8 @@ export function useWebRTC(config: WebRTCConfig) {
     setPeers(new Map());
     setStreams(new Map());
     consumerMetaRef.current.clear();
+    producerStreamKeyRef.current.clear();
+    activeProducerByStreamKeyRef.current.clear();
     joinStateRef.current = 'idle';
   }, []);
 
@@ -163,12 +167,21 @@ export function useWebRTC(config: WebRTCConfig) {
 
   const removeConsumerState = useCallback((producerId: string) => {
     const meta = consumerMetaRef.current.get(producerId);
+    const streamKey = producerStreamKeyRef.current.get(producerId);
+
     consumerMetaRef.current.delete(producerId);
     consumersRef.current.delete(producerId);
+    producerStreamKeyRef.current.delete(producerId);
+
+    if (streamKey && activeProducerByStreamKeyRef.current.get(streamKey) === producerId) {
+      activeProducerByStreamKeyRef.current.delete(streamKey);
+    }
 
     setStreams(prev => {
       const updated = new Map(prev);
-      updated.delete(producerId);
+      if (streamKey) {
+        updated.delete(streamKey);
+      }
       return updated;
     });
 
@@ -209,6 +222,19 @@ export function useWebRTC(config: WebRTCConfig) {
         continue;
       }
 
+      const streamKey = `${consumerInfo.peerId}:${consumerInfo.kind}`;
+      const existingProducerId = activeProducerByStreamKeyRef.current.get(streamKey);
+
+      if (existingProducerId && existingProducerId !== consumerInfo.producerId) {
+        const existingConsumer = consumersRef.current.get(existingProducerId);
+
+        if (existingConsumer) {
+          existingConsumer.close();
+        }
+
+        removeConsumerState(existingProducerId);
+      }
+
       const consumerParams = await fetchJson<CreateConsumerResponse>(
         `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consume`,
         {
@@ -228,12 +254,14 @@ export function useWebRTC(config: WebRTCConfig) {
       });
 
       consumersRef.current.set(consumerInfo.producerId, consumer);
+      producerStreamKeyRef.current.set(consumerInfo.producerId, streamKey);
+      activeProducerByStreamKeyRef.current.set(streamKey, consumerInfo.producerId);
 
       const mediaStream = new MediaStream([consumer.track]);
 
       setStreams(prev => {
         const updated = new Map(prev);
-        updated.set(consumerInfo.producerId, {
+        updated.set(streamKey, {
           producerId: consumerInfo.producerId,
           peerId: consumerInfo.peerId,
           studentName: consumerInfo.studentName,
