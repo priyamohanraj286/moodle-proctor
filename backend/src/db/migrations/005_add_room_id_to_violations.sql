@@ -26,22 +26,21 @@ SET room_id = subq.room_id
 FROM (
   SELECT
     pr.id AS room_id,
-    ea.id AS attempt_id
-  FROM proctoring_rooms pr
-  JOIN exam_attempts ea ON pr.exam_id = ea.exam_id
-  -- Temporal filter: violation must have occurred after room was created
-  -- AND (before room was closed OR room is still active)
-  WHERE pr.status IN ('activated', 'closed')
+    v_inner.id AS violation_id
+  FROM violations v_inner
+  JOIN exam_attempts ea ON ea.id = v_inner.attempt_id
+  JOIN proctoring_rooms pr ON pr.exam_id = ea.exam_id
+  -- Temporal filter: violation must have occurred while the room was active
+  WHERE pr.activated_at IS NOT NULL
   AND (
     -- Room is still active (no closed_at) OR violation occurred before closing
     pr.closed_at IS NULL
-    OR v.occurred_at <= pr.closed_at
+    OR v_inner.occurred_at <= pr.closed_at
   )
-  -- Violation must have occurred after room was created
-  AND v.occurred_at >= pr.created_at
-  AND pr.status = 'activated' -- Only assign to rooms that were activated
+  -- Violation must have occurred after the room was activated
+  AND v_inner.occurred_at >= pr.activated_at
 ) subq
-WHERE v.attempt_id = subq.attempt_id;
+WHERE v.id = subq.violation_id;
 
 -- ============================================================================
 -- STEP 3: Data quality check - ensure no NULL room_id after backfill
