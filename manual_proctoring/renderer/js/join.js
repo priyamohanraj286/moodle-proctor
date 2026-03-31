@@ -23,6 +23,20 @@ function setLoadingState(isLoading) {
 
 let hasAttemptedAutoJoin = false;
 
+function getManualProctoringConfig() {
+  if (typeof API_BASE_URL !== 'string' || !API_BASE_URL.trim()) {
+    throw new Error('The student app configuration did not load correctly.');
+  }
+
+  return {
+    apiBaseUrl: API_BASE_URL,
+    headers:
+      typeof MANUAL_PROCTORING_HEADERS === 'object' && MANUAL_PROCTORING_HEADERS
+        ? MANUAL_PROCTORING_HEADERS
+        : {}
+  };
+}
+
 function normalizeRoomCode(code) {
   // Remove spaces, convert to uppercase
   return code.replace(/\s/g, '').toUpperCase();
@@ -116,11 +130,13 @@ async function joinRoom() {
   setMessage('Joining room...', 'info');
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/room/${roomCode}/join`, {
+    const { apiBaseUrl, headers } = getManualProctoringConfig();
+
+    const response = await fetch(`${apiBaseUrl}/api/room/${roomCode}/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...MANUAL_PROCTORING_HEADERS
+        ...headers
       },
       body: JSON.stringify({
         studentName: name,
@@ -166,7 +182,14 @@ async function joinRoom() {
 
   } catch (error) {
     console.error('Join room error:', error);
-    setMessage('Unable to reach the server. Check that the backend is running.', 'error');
+    const errorMessage = error instanceof Error ? error.message : '';
+
+    if (errorMessage.includes('configuration')) {
+      setMessage(errorMessage, 'error');
+      return;
+    }
+
+    setMessage('Unable to reach the server. Check that the backend is running and reachable from the desktop app.', 'error');
   } finally {
     setLoadingState(false);
   }

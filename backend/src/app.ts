@@ -58,10 +58,20 @@ export async function createApp () {
     .map(origin => origin.trim())
     .filter(Boolean)
 
+  const isDesktopOrigin = (origin: string) => {
+    const normalizedOrigin = origin.trim().toLowerCase()
+    return (
+      normalizedOrigin === 'null' ||
+      normalizedOrigin.startsWith('file://') ||
+      normalizedOrigin.startsWith('capacitor://') ||
+      normalizedOrigin.startsWith('ionic://')
+    )
+  }
+
   await app.register(cors, {
     origin: (origin, callback) => {
       // Allow Electron/file-based clients and non-browser tools without Origin headers.
-      if (!origin) {
+      if (!origin || isDesktopOrigin(origin)) {
         callback(null, true)
         return
       }
