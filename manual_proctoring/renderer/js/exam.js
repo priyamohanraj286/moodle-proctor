@@ -147,10 +147,6 @@ async function uploadLiveSnapshot(imageBase64) {
     return;
   }
 
-  if (webRTCBroadcastState.isConnected && webRTCBroadcastState.isProducing) {
-    return;
-  }
-
   try {
     await fetchWithSessionOrRoom(
       `${API_BASE_URL}/api/live-monitoring/rooms/${encodeURIComponent(roomData.roomCode)}/frame`,
@@ -2079,6 +2075,7 @@ function startFrameCaptureWithOverlay (video) {
   const WS_URL = window.PROCTOR_WS_URL || 'ws://localhost:8000/proctor'
   let ws = null
   let intervalId = null
+  let snapshotIntervalId = null
   let reconnectTimeoutId = null
   let hasConnectedOnce = false
   let stopped = false
@@ -2218,9 +2215,8 @@ function startFrameCaptureWithOverlay (video) {
     return snapshotCanvas.toDataURL('image/jpeg', 0.4).split(',')[1]
   }
 
-  function sendFrame () {
+  function maybeUploadSnapshot () {
     if (!video.videoWidth) return
-
     const now = Date.now()
     if (
       now - lastSnapshotUploadAt >= EXAM_CONFIG.liveSnapshotUploadIntervalMs &&
@@ -2240,6 +2236,19 @@ function startFrameCaptureWithOverlay (video) {
           })
       }
     }
+  }
+
+  function ensureSnapshotLoop () {
+    if (snapshotIntervalId) {
+      return
+    }
+
+    snapshotIntervalId = setInterval(maybeUploadSnapshot, EXAM_CONFIG.liveSnapshotUploadIntervalMs)
+  }
+
+  function sendFrame () {
+    maybeUploadSnapshot()
+    if (!video.videoWidth) return
 
     if (!ws || ws.readyState !== WebSocket.OPEN) return
     if (ws.bufferedAmount > 0) return
@@ -2251,14 +2260,17 @@ function startFrameCaptureWithOverlay (video) {
     ws.send(JSON.stringify({ frame }))
   }
 
+  ensureSnapshotLoop()
   connect()
 
   return {
     stop () {
       stopped = true
       clearInterval(intervalId)
+      clearInterval(snapshotIntervalId)
       clearTimeout(reconnectTimeoutId)
       intervalId = null
+      snapshotIntervalId = null
       reconnectTimeoutId = null
       resetLiveMonitoringState()
 

@@ -215,6 +215,10 @@ export function useWebRTC(config: WebRTCConfig) {
       `${config.backendUrl}/api/webrtc/rooms/${config.roomId}/peers/${config.peerId}/consumers`
     );
 
+    if (joinStateRef.current === 'joined') {
+      setIsConnected(true);
+    }
+
     syncPeers(consumers);
 
     for (const consumerInfo of consumers) {
@@ -352,6 +356,7 @@ export function useWebRTC(config: WebRTCConfig) {
       });
 
       recvTransportRef.current = recvTransport;
+      setIsConnected(true);
 
       await consumeAvailableProducers();
       clearConsumerPoll();

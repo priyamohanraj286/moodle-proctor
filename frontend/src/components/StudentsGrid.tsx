@@ -8,6 +8,7 @@ import { VideoStream } from './VideoStream';
 const MAX_VISIBLE_SLOTS = 15;
 const SNAPSHOT_POLL_INTERVAL_MS = 500;
 const SNAPSHOT_STALE_THRESHOLD_MS = 3000;
+const CONNECTION_LOADING_TIMEOUT_MS = 5000;
 
 interface SnapshotFeed {
   feedId: string;
@@ -27,6 +28,7 @@ export const StudentsGrid = ({ roomId }: StudentsGridProps) => {
   const hasAutoJoined = useRef(false);
   const previousRoomId = useRef<string | undefined>(undefined);
   const [snapshotFeeds, setSnapshotFeeds] = useState<SnapshotFeed[]>([]);
+  const [showConnectionLoading, setShowConnectionLoading] = useState(true);
   const snapshotSinceRef = useRef(0);
   const snapshotFetchInFlightRef = useRef(false);
 
@@ -52,6 +54,7 @@ export const StudentsGrid = ({ roomId }: StudentsGridProps) => {
   useEffect(() => {
     if (!roomId) {
       setSnapshotFeeds([]);
+      setShowConnectionLoading(true);
       snapshotSinceRef.current = 0;
       snapshotFetchInFlightRef.current = false;
       return;
@@ -131,6 +134,27 @@ export const StudentsGrid = ({ roomId }: StudentsGridProps) => {
       window.clearInterval(timerId);
     };
   }, [backendUrl, roomId]);
+
+  useEffect(() => {
+    if (!roomId) {
+      setShowConnectionLoading(true);
+      return;
+    }
+
+    if (isConnected || snapshotFeeds.length > 0 || videoStreams.length > 0) {
+      setShowConnectionLoading(false);
+      return;
+    }
+
+    setShowConnectionLoading(true);
+    const timerId = window.setTimeout(() => {
+      setShowConnectionLoading(false);
+    }, CONNECTION_LOADING_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [isConnected, roomId, snapshotFeeds.length, videoStreams.length]);
 
   useEffect(() => {
     if (previousRoomId.current === undefined && roomId === undefined) {
@@ -224,7 +248,7 @@ export const StudentsGrid = ({ roomId }: StudentsGridProps) => {
           </div>
         </div>
 
-        {!isConnected && (
+        {showConnectionLoading && !isConnected && snapshotFeeds.length === 0 && videoStreams.length === 0 && (
           <div className="surface-subtle flex items-center gap-3 rounded-[24px] px-4 py-4 text-slate-700">
             <FiLoader className="h-4 w-4 animate-spin text-emerald-700" />
             <p className="text-sm font-medium">
@@ -233,16 +257,16 @@ export const StudentsGrid = ({ roomId }: StudentsGridProps) => {
           </div>
         )}
 
-        {isConnected && peers.length === 0 && (
+        {!showConnectionLoading && videoStreams.length === 0 && snapshotFeeds.length === 0 && (
           <div className="empty-state px-6 py-14">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
               <FiUsers className="h-6 w-6" />
             </div>
             <h3 className="mt-5 text-lg font-semibold text-slate-900">
-              Waiting for students to enter the room
+              Waiting for a student feed
             </h3>
             <p className="mt-2 text-sm text-slate-500">
-              The wall will populate as soon as participants connect their desktop client.
+              The wall will populate as soon as a student camera feed or fallback snapshot reaches this room.
             </p>
           </div>
         )}
